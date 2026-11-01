@@ -132,12 +132,14 @@ function reviewDestination(doc,choice,count){
  };
  return {reviewId:review.id,reviewName:review.name,listsId:ensure('Conversation lists'),bookmarksId:ensure('Bookmarks')};
 }
-function apply(doc){
+function apply(doc,choice){
  const all=new Map(app.entries.map(e=>[String(e.id),e]));
  const research=app.research;
  for(const key of ['lists','bookmarks','folders'])if(!Array.isArray(research[key]))throw Error('Research records unavailable');
  const count={newLists:0,updatedLists:0,addedMembers:0,newSnippets:0,updatedReasons:0,unverifiedSnippets:0,newBookmarks:0,newFolders:0,existingBookmarks:0,missingConversations:0,missingMessages:0,invalid:0};
- const stamp=new Date().toISOString(),meta=(kind,label)=>({schema:SCHEMA,kind,reviewLabel:doc.reviewLabel,requestedLabel:label,importedAt:stamp});
+ const destination=reviewDestination(doc,choice,count);
+ count.reviewName=destination.reviewName;count.duplicateCopies=0;count.sameMessageCopies=0;
+ const stamp=new Date().toISOString(),meta=(kind,label)=>({schema:SCHEMA,kind,reviewLabel:choice.name||doc.reviewLabel||destination.reviewName,reviewFolderId:destination.reviewId,requestedLabel:label,importedAt:stamp});
  function verifySpan(message,details){
  if(!message||typeof message.text!=='string'||!details||typeof details!=='object')return null;
  const text=message.text;
@@ -163,20 +165,19 @@ function apply(doc){
   const found=new Set();
   for(const raw of ids){const cid=getId(raw);if(cid&&all.has(cid))found.add(cid);else count.missingConversations++}
   if(!found.size)continue;
-  let list=research.lists.find(x=>tagged(x,'list')&&(same(x.name,label)||same(x.aiReview.requestedLabel,label)));
+  let list=research.lists.find(x=>tagged(x,'list')&&x.aiReview?.reviewFolderId===destination.reviewId&&
+   (same(x.name,label)||same(x.aiReview.requestedLabel,label)));
+  if(!list)list=research.lists.find(x=>tagged(x,'list')&&x.folderId===destination.listsId&&same(x.aiReview.requestedLabel,label));
   if(!list){
    const used=new Set(research.lists.map(x=>String(x.name).toLowerCase()));
-   list={id:key(),name:unique(label,used),members:[],slot:null,aiReview:meta('list',label)};
+   list={id:key(),name:unique(label,used),members:[],slot:null,folderId:destination.listsId,aiReview:meta('list',label)};
    research.lists.push(list);count.newLists++;
   }else count.updatedLists++;
   const members=new Set(list.members||[]);
   for(const cid of found)if(!members.has(cid)){members.add(cid);count.addedMembers++}
   list.members=[...members];
-  // New recommendations share one folder tree with bookmarks. Existing manual folders are preserved.
-  if(list.folderId===null||list.folderId===undefined){
-   const reviewFolder=window.oiUnifiedData?.reviewFolder(doc.reviewLabel);
-   if(reviewFolder)list.folderId=reviewFolder;
-  }
+  // Do not move manually reorganised lists during a repeat import.
+  if(list.folderId===null||list.folderId===undefined)list.folderId=destination.listsId;
   const picks=item.snippets??item.conversationSnippets??[];
   if(!Array.isArray(picks)){count.invalid++;continue}
   if(picks.length>ids.length+1000)throw Error('Too many snippets for one list');
@@ -199,36 +200,32 @@ function apply(doc){
    count.newSnippets++;
   }
  }
- const bookmarkIds=new Set(research.bookmarks.map(b=>JSON.stringify([String(b.conversationId),String(b.messageId)])));
- function folder(label,parent,kind){
-  let existing=research.folders.find(f=>f.parentId===parent&&tagged(f,kind)&&(same(f.name,label)||same(f.aiReview.requestedLabel,label)));
-  if(existing)return existing;
-  const used=new Set(research.folders.filter(f=>f.parentId===parent).map(f=>String(f.name).toLowerCase()));
-  const made={id:key(),name:unique(label,used),parentId:parent,aiReview:meta(kind,label)};
-  research.folders.push(made);count.newFolders++;return made;
- }
- let root=null;
+
+ const keyOf=(cid,mid)=>JSON.stringify([String(cid),String(mid)]);
+ const spanId=snippet=>[String(snippet?.start??''),String(snippet?.end??''),String(snippet?.text??'')].join('|');
  for(const item of doc.bookmarks){
   if(!item||typeof item!=='object'){count.invalid++;continue}
   const cid=getId(item.conversationId||item.conversation_id),mid=getId(item.messageId||item.message_id);
   if(!cid||!mid){count.invalid++;continue}
   const conv=all.get(cid);if(!conv){count.missingConversations++;continue}
-  const msg=conv.messages?.find(m=>String(m.id)===mid);
-  if(!msg){count.missingMessages++;continue}
-  const bookmarkKey=JSON.stringify([cid,mid]);
-  if(bookmarkIds.has(bookmarkKey)){count.existingBookmarks++;continue}
-  if(!root)root=folder('Bookmarks',window.oiUnifiedData?.reviewFolder(doc.reviewLabel)??null,'root');
-  const parts=clean(item.group||item.folder||'General',240).split('/').map(x=>clean(x,70)).filter(Boolean).slice(0,4);
-  let parent=root;
-  for(const part of parts.length?parts:['General'])parent=folder(name(part,'General'),parent.id,'folder');
-  const excerpt=verifySpan(msg,item)||window.oiBookmarkText.anchor(msg.text||'');
+  const message=conv.messages?.find(m=>String(m.id)===mid);
+  if(!message){count.missingMessages++;continue}
+  const excerpt=verifySpan(message,item)||window.oiBookmarkText.anchor(message.text||'');
+  const matches=research.bookmarks.filter(b=>keyOf(b.conversationId,b.messageId)===keyOf(cid,mid));
+  const previouslyInReview=matches.some(b=>
+   (b.aiReview?.reviewFolderId===destination.reviewId||b.folderId===destination.bookmarksId)&&spanId(b.snippet)===spanId(excerpt));
+  // Reimports reuse the same review's exact bookmark, preserving any manual edits.
+  if(previouslyInReview){count.existingBookmarks++;continue}
+  const duplicate=matches.some(b=>spanId(b.snippet)===spanId(excerpt));
   research.bookmarks.push({
-   id:key(),conversationId:cid,messageId:mid,folderId:parent.id,favourite:false,
+   id:key(),conversationId:cid,messageId:mid,folderId:destination.bookmarksId,favourite:false,
    title:name(item.title||item.label,'Message from '+clean(conv.title,55)),
    description:clean(item.reason||item.description||item.note||'',350),
-   sourceTitle:conv.title,snippet:excerpt,originalSnippet:structuredClone(excerpt),aiReview:meta('bookmark')
+   sourceTitle:conv.title,snippet:excerpt,originalSnippet:structuredClone(excerpt),
+   aiReview:{...meta('bookmark'),suggestedGroup:clean(item.group||item.folder||'',240)}
   });
-  bookmarkIds.add(bookmarkKey);count.newBookmarks++;
+  count.newBookmarks++;
+  if(matches.length){if(duplicate)count.duplicateCopies++;else count.sameMessageCopies++}
  }
  return count;
 }
