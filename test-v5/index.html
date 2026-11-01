@@ -1992,7 +1992,7 @@ async function clearAllData(){
  clearTimeout(metaTimer);ready=false;
  try{await removeAll();cachedMeta={imports:[],research:{},workspace:null,progress:null,accent:'blue'};
   app.loadLocal({schema:'oi-linked-messages-v2',entries:[],imports:[],accent:'blue',research:{}});
-  show('all test app data cleared on this device');
+  show('all app data cleared on this device');
  }finally{ready=true}
 }
 async function restore(){
@@ -2082,7 +2082,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
    const bookmarks=Array.isArray(payload.research?.bookmarks)?payload.research.bookmarks.length:0;
    const lists=Array.isArray(payload.research?.lists)?payload.research.lists.length:0;
    const folders=Array.isArray(payload.research?.folders)?payload.research.folders.length:0;
-   const description=`Found ${conversations.toLocaleString()} conversations, ${bookmarks.toLocaleString()} bookmarks, ${lists.toLocaleString()} lists and ${folders.toLocaleString()} folders in “${file.name}”. Restoring will replace the conversations AND research data currently stored in this test app, not merge them. Your original HTML file will not be changed. Continue?`;
+   const description=`Found ${conversations.toLocaleString()} conversations, ${bookmarks.toLocaleString()} bookmarks, ${lists.toLocaleString()} lists and ${folders.toLocaleString()} folders in “${file.name}”. Restoring will replace the conversations AND research data currently stored in this app, not merge them. Your original HTML file will not be changed. Continue?`;
    window.oiConfirm('Restore saved Search Tool file?',description,'Restore and save',()=>{
     void (async()=>{
      try {
