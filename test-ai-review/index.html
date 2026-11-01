@@ -407,6 +407,11 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #oi-action-dialog .oi-review-import [hidden]{display:none!important}
 :is(#view-library,#view-organisation) .oi-bookmark-duplicate{display:inline-flex;align-items:center;max-width:100%;margin:6px 0 9px;padding:3px 8px;border:1px solid var(--line-dark);border-radius:6px;background:var(--soft);color:var(--ink);font-size:11px;font-weight:650;line-height:1.35;white-space:normal}
 #view-organisation .oi-org-section-note{font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted);margin-left:5px}
+
+:is(#view-library,#oi-action-dialog) .oi-duplicate-comparison{border:1px solid var(--line);border-radius:9px;background:var(--card);padding:10px;margin:8px 0;overflow-wrap:anywhere}
+#oi-action-dialog .oi-duplicate-comparison .oi-duplicate-excerpt{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;line-height:1.45;margin:8px 0}
+#oi-action-dialog .oi-duplicate-comparison .oi-duplicate-current{color:var(--muted);font-size:11px}
+#oi-action-dialog .oi-duplicate-comparison .oi-org-danger{color:#9d2636;border-color:#b5737c}
 </style></head><body><main class="shell" id="view-main">
 <header class="header"><h1>ChatGPT Search Tool</h1><div class="actions"><button type="button" id="oi-main-save">Save</button><button type="button" id="oi-main-import">Import</button><button type="button" id="oi-help" class="oi-header-icon" title="Help and guide" aria-label="Help and guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.6 2.6 0 1 1 5 1c0 1.9-2.5 2.1-2.5 3.7"/><path d="M12 17.2h.01"/></svg></button><button type="button" id="oi-settings" class="oi-header-icon" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 2.7h3.4l.6 2.2q.9.25 1.6.65l2.1-.85 2.3 2.3-.85 2.1q.4.7.65 1.6l2.2.6v3.4l-2.2.6q-.25.9-.65 1.6l.85 2.1-2.3 2.3-2.1-.85q-.7.4-1.6.65l-.6 2.2h-3.4l-.6-2.2q-.9-.25-1.6-.65l-2.1.85-2.3-2.3.85-2.1q-.4-.7-.65-1.6l-2.2-.6v-3.4l2.2-.6q.25-.9.65-1.6l-.85-2.1 2.3-2.3 2.1.85q.7-.4 1.6-.65z"/><circle cx="12" cy="12" r="3"/></svg></button></div></header><div id="oi-notice" class="status-notice" hidden><output id="oi-feedback" role="status" aria-live="polite" hidden></output><button type="button" id="oi-dismiss-status" aria-label="Dismiss status">×</button></div><button type="button" id="oi-undo-import" hidden>Undo import</button>
 <section class="card search-card"><div class="search-row"><input class="search-input" type="text" placeholder="Search words or phrases…" aria-label="Search words or phrases"><button class="and" type="button">and</button><button class="or" type="button">or</button></div><div class="term-space"></div></section>
@@ -1558,15 +1563,20 @@ render();
   },
   setListFilter(next){Object.assign(app.listFilter,next);changed()},
   bookmark(cid,mid,snippet){
-   const existing=research().bookmarks.find(b=>b.conversationId===cid&&b.messageId===mid);
-   if(existing){service.removeBookmark(existing.id);return null;}
+   const matches=research().bookmarks.filter(b=>b.conversationId===cid&&b.messageId===mid);
+   if(matches.length>1){
+    if(window.oiCompareBookmarkCopies)window.oiCompareBookmarkCopies(matches[0]);
+    else window.oiAlert('Multiple bookmarks','This message has more than one saved bookmark. Review them from Organisation before removing a copy.');
+    return null;
+   }
+   if(matches.length===1){service.removeBookmark(matches[0].id);return null;}
    const entry=app.entries.find(e=>e.id===cid),message=entry?.messages.find(m=>m.id===mid);if(!message)return null;
    const excerpt=window.oiBookmarkText.inspect(message.text,snippet)==='valid'?structuredClone(snippet):window.oiBookmarkText.anchor(message.text);
    const bookmark={id:id(),conversationId:cid,messageId:mid,folderId:null,favourite:false,title:'',description:'',sourceTitle:entry.title,snippet:excerpt,originalSnippet:structuredClone(excerpt)};
    research().bookmarks.push(bookmark);changed();return bookmark.id;
   },
   removeBookmark(bookmarkId){const at=research().bookmarks.findIndex(b=>b.id===bookmarkId);if(at<0)return;removed.push({at,record:structuredClone(research().bookmarks[at])});research().bookmarks.splice(at,1);changed();window.oiBookmarkNotice(removed.length)},
-  undoBookmark(){const last=removed.pop();if(!last)return;const b=last.record;if(!service.isBookmarked(b.conversationId,b.messageId))research().bookmarks.splice(Math.min(last.at,research().bookmarks.length),0,b);changed();window.oiBookmarkNotice(removed.length)},
+  undoBookmark(){const last=removed.pop();if(!last)return;const b=last.record;if(!byBookmark(b.id))research().bookmarks.splice(Math.min(last.at,research().bookmarks.length),0,b);changed();window.oiBookmarkNotice(removed.length)},
   toggleFavourite(bookmarkId){const b=byBookmark(bookmarkId);if(b){b.favourite=!b.favourite;changed()}},
   editBookmark(bookmarkId,title,description){const b=byBookmark(bookmarkId);if(b){b.title=String(title).trim();b.description=String(description);changed()}},
   setBookmarkSnippet(bookmarkId,snippet){const b=byBookmark(bookmarkId);if(!b)return false;const text=window.oiBookmarkText.source(app,b)?.text;if(window.oiBookmarkText.inspect(text,snippet)!=='valid')return false;b.snippet=structuredClone(snippet);changed();return true},
@@ -1774,9 +1784,36 @@ render();
    form.onsubmit=e=>{e.preventDefault();close();services.editBookmark(bookmark.id,title.value,note.value)};body.append(form);
   });
  }
+
+ function compareBookmarkCopies(bookmark){
+  const duplicates=duplicateIndex().matching(bookmark);
+  window.oiDialog('Review saved copies',(body,close)=>{
+   const explanation=el('p','internal-meta',duplicates.length+' bookmarks refer to the same original message. The selected passage may differ. Removing a copy leaves the other bookmarks and the source conversation intact.');
+   body.append(explanation);
+   for(const copy of duplicates){
+    const wrap=el('div','oi-duplicate-comparison');
+    const title=el('strong','',copy.title||copy.sourceTitle||'Saved bookmark');
+    wrap.append(title);
+    if(copy.id===bookmark.id)wrap.append(el('span','oi-duplicate-current',' · Current copy'));
+    const path=copy.folderId&&byFolder(copy.folderId)?folderPath(copy.folderId).map(f=>f.name).join(' › '):'Unfiled';
+    wrap.append(el('p','internal-meta',path));
+    wrap.append(el('p','oi-duplicate-excerpt',copy.snippet?.text||'No excerpt saved'));
+    const remove=button('Remove this copy',()=>{
+     close();
+     window.oiConfirm('Remove this bookmark copy?','Remove “'+(copy.title||copy.sourceTitle||'bookmark')+'”? Other copies and the original message will remain. You can undo this removal.','Remove copy',()=>services.removeBookmark(copy.id));
+    });
+    remove.className='oi-org-danger';wrap.append(remove);
+    body.append(wrap);
+   }
+   body.append(button('Keep all copies',close));
+  });
+ }
+ window.oiCompareBookmarkCopies=compareBookmarkCopies;
  function bookmarkActions(bookmark){
   window.oiDialog('Bookmark actions',(body,close)=>{
-   body.classList.add('action-menu');body.append(button('Edit details',()=>{close();editDetails(bookmark)}),button('Change snippet',()=>{close();openSnippet(bookmark)}),button('Move to folder',()=>{close();movePicker({bookmark})}),button('Remove bookmark',()=>{close();services.removeBookmark(bookmark.id)}),button('Cancel',close));
+   body.classList.add('action-menu');
+   if(duplicateIndex().info(bookmark))body.append(button('Compare bookmark copies',()=>{close();compareBookmarkCopies(bookmark)}));
+   body.append(button('Edit details',()=>{close();editDetails(bookmark)}),button('Change snippet',()=>{close();openSnippet(bookmark)}),button('Move to folder',()=>{close();movePicker({bookmark})}),button('Remove bookmark',()=>{close();services.removeBookmark(bookmark.id)}),button('Cancel',close));
   });
  }
  function bookmarkHeader(header){
