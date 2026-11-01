@@ -70,7 +70,15 @@ function chooseDestination(doc){
    const nameLabel=document.createElement('label');
    nameLabel.htmlFor='oi-review-folder-name';nameLabel.textContent='Review / folder name (optional)';
    input.id='oi-review-folder-name';input.type='text';input.maxLength=95;input.value=doc.reviewLabel||'';input.placeholder='AI Review';
-   form.append(nameLabel,input);
+   const nameControl=document.createElement('div');nameControl.className='oi-review-name-control';
+   const clearName=document.createElement('button');clearName.type='button';
+   clearName.className='oi-review-name-clear';clearName.textContent='×';
+   clearName.setAttribute('aria-label','Clear suggested review name');clearName.title='Clear name';
+   const syncNameClear=()=>{clearName.hidden=!input.value.length};
+   clearName.onclick=()=>{input.value='';syncNameClear();input.focus({preventScroll:true})};
+   input.addEventListener('input',syncNameClear);
+   nameControl.append(input,clearName);syncNameClear();
+   form.append(nameLabel,nameControl);
    const title=document.createElement('p');title.className='oi-review-heading';title.textContent='Destination';form.append(title);
    const choices=document.createElement('div');choices.className='oi-review-choices';
    const fresh=document.createElement('input'),existing=document.createElement('input');
