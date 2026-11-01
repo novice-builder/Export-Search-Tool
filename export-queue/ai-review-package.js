@@ -79,6 +79,7 @@ window.oiBuildAIReviewPackage=async choice=>{
   const md=window.oiBuildEvidenceExport({...choice,audience:'ai',format:'markdown',sources:true});
   entries.push({name:'ChatGPT_Search_Evidence.md',body:md.file});
  }
- return makeZip(entries);
+ const result=await makeZip(entries);
+ return new File([result],window.oiFileNames.file('searchAI','zip'),{type:'application/zip'});
 };
 })();

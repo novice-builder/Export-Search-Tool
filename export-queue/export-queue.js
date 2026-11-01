@@ -221,7 +221,7 @@ async function buildPackage(choice){
   items.push({name:'ChatGPT_Search_Evidence.md',body:new Blob([output],{type:'text/markdown'})});
  }
  const zip=await window.oiZipAIReviewFiles(items);
- return new File([zip],'ChatGPT_Search_Export_Queue.zip',{type:'application/zip'});
+ return new File([zip],window.oiFileNames.file('exportQueue','zip'),{type:'application/zip'});
 }
 window.oiExportQueue={items:()=>state().slice(),excludedItems,add,remove,exclude,clear,has,status,expanded,name,buildPackage,makeEvidence};
 })();

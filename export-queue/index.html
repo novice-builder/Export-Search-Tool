@@ -250,6 +250,13 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #oi-action-dialog .oi-settings-body p{margin:0;white-space:normal}
 #oi-action-dialog .oi-settings-body h3{margin:0;font-size:14px}
 #oi-action-dialog .oi-settings-body .oi-clear-data{color:#9d2636;border-color:#dca8ad;text-align:left;white-space:normal}
+#oi-action-dialog .oi-file-name-settings label{font-size:13px;font-weight:600;margin:8px 0 3px}
+#oi-action-dialog .oi-file-name-row{display:flex;align-items:center;gap:8px}
+#oi-action-dialog .oi-file-name-row input{min-width:0;flex:1;margin:3px 0 6px}
+#oi-action-dialog .oi-file-ext{font-size:11px;color:var(--muted);flex-shrink:0;max-width:95px;text-align:right}
+#oi-action-dialog .oi-file-name-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;margin-top:12px}
+#oi-action-dialog .oi-file-name-actions button{font-size:12px}
+#oi-action-dialog .oi-file-name-actions button:first-child{margin-right:auto}
 
 /* Evidence-centred conversation lists. Uses the same card hierarchy as bookmarks. */
 #view-library .oi-list-card{margin-bottom:10px;padding:11px}
@@ -526,6 +533,30 @@ window.oiTime={
 (()=>{
  'use strict';
  const uid=()=> 'research-'+Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16)).join('-');
+
+/* Local download filename preferences; downloaded extensions are selected by exporter. */
+window.oiFileNames=(()=>{
+ const defaults=Object.freeze({savedHtml:'ChatGPT_Search_Tool_Saved',searchResults:'ChatGPT_Search_Results',searchAI:'ChatGPT_Search_AI_Review_Package',exportQueue:'ChatGPT_Search_Export_Queue'});
+ const extensions=Object.freeze({savedHtml:'html',searchResults:'md',searchAI:'zip',exportQueue:'zip'});
+ function clean(value,key){
+  let result=String(value??'').trim().replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g,'_');
+  result=result.replace(/\.(?:html?|md|txt|zip)$/i,'').replace(/[. ]+$/g,'').trim().slice(0,120).replace(/[. ]+$/g,'');
+  return result||defaults[key];
+ }
+ const preferences=()=>window.oiArchive?.research?.downloadFileNames||{};
+ const get=key=>{
+  if(!Object.hasOwn(defaults,key))throw Error('Unknown file type');
+  return clean(preferences()[key]??defaults[key],key);
+ };
+ const file=(key,extension)=>get(key)+'.'+(extension||extensions[key]);
+ const setAll=values=>{
+  const app=window.oiArchive;if(!app?.research)throw Error('Local archive is not ready');
+  const updated={};
+  for(const key of Object.keys(defaults))updated[key]=clean(values?.[key],key);
+  app.research.downloadFileNames=updated;app.changed();
+ };
+ return {defaults,get,file,setAll};
+})();
  const source=(data,b)=>data.entries.find(e=>e.id===b.conversationId)?.messages.find(m=>m.id===b.messageId);
  const anchor=(text,start=0,end=Math.min(text.length,start+300))=>({start,end,text:text.slice(start,end)});
  function inspect(text,snippet){
@@ -1030,7 +1061,7 @@ async function runSaveStage(i){if(busy||i!==saveState.step+1)return false;busy=t
  if(i===1){stageReport('Stage 1/5: serializing complete conversation data…');await yieldUI();saveState.raw=JSON.stringify(createPortableData());stageReport('Stage 1/5 complete: '+saveState.raw.length.toLocaleString()+' JSON characters; '+data.entries.length+' conversations.');}
  if(i===2){if(typeof CompressionStream==='undefined')throw Error('CompressionStream gzip is unavailable in this HTML viewer');stageReport('Stage 2/5: compressing '+saveState.raw.length.toLocaleString()+' JSON characters…');await yieldUI();saveState.gz=await new Response(new Blob([saveState.raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();stageReport('Stage 2/5 complete: '+prettySize(saveState.gz.byteLength)+' gzip data.');saveState.raw=null;}
  if(i===3){stageReport('Stage 3/5: encoding '+prettySize(saveState.gz.byteLength)+' as Base64…');await yieldUI();saveState.b64=encodeBase64(new Uint8Array(saveState.gz));stageReport('Stage 3/5 complete: '+saveState.b64.length.toLocaleString()+' Base64 characters.');saveState.gz=null;}
- if(i===4){stageReport('Stage 4/5: assembling standalone HTML…');await yieldUI();const clone=document.documentElement.cloneNode(true);clone.querySelectorAll('#view-library,#view-reader,#view-snippet,#oi-action-dialog,#oi-bookmark-notice,#oi-include-choices,#oi-exclude-choices,#oi-priority-row').forEach(node=>node.remove());clone.querySelector('script[data-local-persistence]')?.remove();clone.querySelector('script[data-saved-html-import]')?.remove();clone.querySelector('script[data-settings-ui]')?.remove();clone.querySelector('script[data-ai-review-import]')?.remove();clone.querySelector('script[data-ai-review-package]')?.remove();clone.querySelector('link[rel=manifest]')?.remove();clone.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(node=>node.remove());clone.querySelector('.list-rows').replaceChildren();clone.querySelector('#oi-undo-import').hidden=true;clone.querySelector('#oi-notice').hidden=true;clone.querySelector('#oi-feedback').hidden=true;clone.querySelector('main.shell').hidden=false;clone.querySelector('main.shell').inert=false;clone.querySelector('#oi-results-host').hidden=true;clone.querySelector('#compressed-archive').textContent=saveState.b64;clone.querySelector('#portable-data').textContent='{"entries":[],"accent":"blue","imports":[]}';clone.querySelector('#status').textContent='Opening saved compressed archive…';const rep=clone.querySelector('#stage-report');if(rep)rep.textContent='Saved archive ready. Imported conversations will restore automatically.';const html='<!doctype html>\n'+clone.outerHTML;saveState.file=new File([html],'ChatGPT_Search_Tool_Saved.html',{type:'text/html'});stageReport('Stage 4/5 complete: standalone HTML '+prettySize(saveState.file.size)+'.');saveState.b64=null;}
+ if(i===4){stageReport('Stage 4/5: assembling standalone HTML…');await yieldUI();const clone=document.documentElement.cloneNode(true);clone.querySelectorAll('#view-library,#view-reader,#view-snippet,#oi-action-dialog,#oi-bookmark-notice,#oi-include-choices,#oi-exclude-choices,#oi-priority-row').forEach(node=>node.remove());clone.querySelector('script[data-local-persistence]')?.remove();clone.querySelector('script[data-saved-html-import]')?.remove();clone.querySelector('script[data-settings-ui]')?.remove();clone.querySelector('script[data-ai-review-import]')?.remove();clone.querySelector('script[data-ai-review-package]')?.remove();clone.querySelector('link[rel=manifest]')?.remove();clone.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(node=>node.remove());clone.querySelector('.list-rows').replaceChildren();clone.querySelector('#oi-undo-import').hidden=true;clone.querySelector('#oi-notice').hidden=true;clone.querySelector('#oi-feedback').hidden=true;clone.querySelector('main.shell').hidden=false;clone.querySelector('main.shell').inert=false;clone.querySelector('#oi-results-host').hidden=true;clone.querySelector('#compressed-archive').textContent=saveState.b64;clone.querySelector('#portable-data').textContent='{"entries":[],"accent":"blue","imports":[]}';clone.querySelector('#status').textContent='Opening saved compressed archive…';const rep=clone.querySelector('#stage-report');if(rep)rep.textContent='Saved archive ready. Imported conversations will restore automatically.';const html='<!doctype html>\n'+clone.outerHTML;saveState.file=new File([html],window.oiFileNames.file('savedHtml','html'),{type:'text/html'});stageReport('Stage 4/5 complete: standalone HTML '+prettySize(saveState.file.size)+'.');saveState.b64=null;}
  if(i===5){stageReport('Stage 5/5: handing '+prettySize(saveState.file.size)+' HTML to Share/download…');await yieldUI();const result=await window.oiDownloadFile(saveState.file);if(result.cancelled){stageReport('Save cancelled. The archive remains loaded.','success');return false;}stageReport(result.method==='share'?'Share returned. Reopen the saved HTML to verify.':'Download handed to the browser. Reopen the saved HTML to verify.','success');}
 
  saveState.step=i;if(i<5)stageReport($('stage-report').textContent+'\nElapsed: '+((performance.now()-start)/1000).toFixed(2)+' s. Tap stage '+(i+1)+' when ready.');
@@ -2231,7 +2262,7 @@ window.oiBuildEvidenceExport=choice=>{
    return heading+'\n'+(markdown?fence(m.text)+'text\n':'')+m.text+(markdown?'\n'+fence(m.text):'')+'\n';
   }).join('\n')).join('\n');type=markdown?'text/markdown':'text/plain';extension=markdown?'md':'txt';
  }
- return {payload,file:new File([text],'ChatGPT_Search_Results.'+extension,{type:type+';charset=utf-8'})};
+ return {payload,file:new File([text],window.oiFileNames.file('searchResults',extension),{type:type+';charset=utf-8'})};
 };
 
 </script><script data-settings-ui>
@@ -2243,6 +2274,45 @@ window.oiBuildEvidenceExport=choice=>{
   const title=document.createElement('h3');title.textContent='Data management';
   const status=document.createElement('p');status.textContent=window.oiPwaTest?.status||'Storage status not available';
   const tip=document.createElement('p');tip.textContent='Conversations and research are saved locally in this installation. Safari and Home Screen apps may have separate storage.';
+
+  const filenameButton=document.createElement('button');filenameButton.type='button';filenameButton.textContent='Default filenames';
+  filenameButton.onclick=()=>{
+   close();
+   window.oiDialog('Default filenames',(panel,done)=>{
+    const names=window.oiFileNames,form=document.createElement('form');form.className='oi-file-name-settings';
+    const intro=document.createElement('p');intro.textContent='Choose the names for downloaded files. Extensions are added automatically. Leave any field blank to use its default.';form.append(intro);
+    const options=[
+     ['savedHtml','Saved HTML archive','.html'],
+     ['searchResults','Search results','.md / .html / .txt'],
+     ['searchAI','Search AI review ZIP','.zip'],
+     ['exportQueue','Export Queue AI ZIP','.zip']
+    ];
+    const inputs={};
+    for(const [key,labelText,extension] of options){
+     const label=document.createElement('label'),input=document.createElement('input'),row=document.createElement('div'),ext=document.createElement('span');
+     const id='oi-filename-'+key;
+     label.textContent=labelText;label.htmlFor=id;
+     input.id=id;input.type='text';input.maxLength=120;input.value=names.get(key);
+     input.autocomplete='off';input.spellcheck=false;
+     input.setAttribute('aria-label',labelText+' filename without extension');
+     row.className='oi-file-name-row';ext.className='oi-file-ext';ext.textContent=extension;
+     row.append(input,ext);form.append(label,row);inputs[key]=input;
+    }
+    const hint=document.createElement('p');hint.textContent='These settings affect only downloaded filenames, not evidence contents or the filenames inside AI review ZIPs.';form.append(hint);
+    const actions=document.createElement('div');actions.className='oi-file-name-actions';
+    const reset=document.createElement('button');reset.type='button';reset.textContent='Restore defaults';
+    reset.onclick=()=>{for(const [key,input] of Object.entries(inputs))input.value=names.defaults[key]};
+    const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=done;
+    const save=document.createElement('button');save.type='submit';save.textContent='Save names';save.className='primary';
+    actions.append(reset,cancel,save);form.append(actions);
+    form.onsubmit=event=>{
+     event.preventDefault();
+     try{names.setAll(Object.fromEntries(Object.entries(inputs).map(([key,input])=>[key,input.value])));done();}
+     catch(error){window.oiAlert('Cannot save filenames',error?.message||String(error))}
+    };
+    panel.append(form);
+   });
+  };
   const projectButton=document.createElement('button');projectButton.type='button';projectButton.textContent='Project naming and labels';
   projectButton.onclick=()=>{
    close();
@@ -2282,7 +2352,7 @@ window.oiBuildEvidenceExport=choice=>{
    });
   };
   const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=close;
-  main.append(title,status,tip,projectButton,clear,done);body.append(main);
+  main.append(filenameButton,title,status,tip,projectButton,clear,done);body.append(main);
  }));
 })();
 </script><script data-local-persistence>
@@ -2590,7 +2660,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
  window.oiImportSavedHtml=importSavedHtml;
 })();
 
-</script><script data-ai-review-import src="./ai-review-import.js?v=7"></script><script data-ai-review-package src="./ai-review-package.js?v=2"></script><script data-export-queue src="./export-queue.js?v=2"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
+</script><script data-ai-review-import src="./ai-review-import.js?v=7"></script><script data-ai-review-package src="./ai-review-package.js?v=3"></script><script data-export-queue src="./export-queue.js?v=3"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
 (()=>{
 'use strict';
 const app=window.oiArchive;
