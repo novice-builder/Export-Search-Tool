@@ -2527,7 +2527,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
  window.oiImportSavedHtml=importSavedHtml;
 })();
 
-</script><script data-ai-review-import src="./ai-review-import.js?v=5"></script><script data-ai-review-package src="./ai-review-package.js?v=1"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
+</script><script data-ai-review-import src="./ai-review-import.js?v=6"></script><script data-ai-review-package src="./ai-review-package.js?v=1"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
 (()=>{
 'use strict';
 const app=window.oiArchive;
@@ -2995,11 +2995,15 @@ function chooseFolderMerge(items){
 }
 function folderRows(root,folders){
  if(!folders.length)return;
+ const duplicates=window.oiBookmarkDuplicateIndex?.();
  for(const f of folders){
   shown.add('folder:'+f.id);
+  const own=s().bookmarks.filter(x=>x.folderId===f.id);
   const inside=s().folders.filter(x=>x.parentId===f.id).length+
-   s().lists.filter(x=>x.folderId===f.id).length+s().bookmarks.filter(x=>x.folderId===f.id).length;
-  entryRow(root,'folder',f.name,inside+' direct item(s)',()=>orgFolder(f.id),{type:'folder',id:f.id,more:()=>folderActions(f)});
+   s().lists.filter(x=>x.folderId===f.id).length+own.length;
+  const repeated=own.filter(x=>duplicates?.info(x)).length;
+  entryRow(root,'folder',f.name,inside+' direct item(s)'+(repeated?' · '+repeated+' repeated-source bookmark(s)':''),
+   ()=>orgFolder(f.id),{type:'folder',id:f.id,more:()=>folderActions(f)});
  }
 }
 function listRows(root,lists){
