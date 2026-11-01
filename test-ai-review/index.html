@@ -392,6 +392,21 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #view-organisation .oi-org-breadcrumbs::-webkit-scrollbar{display:none}
 #view-organisation .oi-org-breadcrumbs button,#view-organisation .oi-org-breadcrumbs .oi-org-current{flex-shrink:0;white-space:nowrap;overflow-wrap:normal}
 #view-organisation .oi-org-pathbar{flex-wrap:nowrap}
+
+/* AI Review import chooser and non-destructive duplicate indicators */
+#oi-action-dialog .oi-review-import form{display:grid;gap:8px}
+#oi-action-dialog .oi-review-import input[type=text],#oi-action-dialog .oi-review-import select{width:100%;max-width:100%;min-width:0;font:inherit;font-size:16px;border:1px solid var(--line-dark);border-radius:9px;background:var(--card);color:var(--ink);padding:9px;margin:0;min-height:42px}
+#oi-action-dialog .oi-review-import label{font-size:13px;font-weight:600;margin:3px 0 0}
+#oi-action-dialog .oi-review-heading{font-size:14px;font-weight:700;margin:10px 0 0}
+#oi-action-dialog .oi-review-choices{display:grid;gap:8px}
+#oi-action-dialog .oi-review-choices label{display:flex;align-items:center;gap:9px;min-height:36px;font-size:14px;font-weight:400;margin:0}
+#oi-action-dialog .oi-review-choices input[type=radio]{margin:0;flex-shrink:0;width:19px;height:19px;accent-color:var(--accent)}
+#oi-action-dialog .oi-review-hint{font-size:12px;line-height:1.45;color:var(--muted);margin:3px 0}
+#oi-action-dialog .oi-review-controls{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+#oi-action-dialog .oi-review-controls button{font-size:13px;min-height:38px}
+#oi-action-dialog .oi-review-import [hidden]{display:none!important}
+:is(#view-library,#view-organisation) .oi-bookmark-duplicate{display:inline-flex;align-items:center;max-width:100%;margin:6px 0 9px;padding:3px 8px;border:1px solid var(--line-dark);border-radius:6px;background:var(--soft);color:var(--ink);font-size:11px;font-weight:650;line-height:1.35;white-space:normal}
+#view-organisation .oi-org-section-note{font-weight:500;letter-spacing:0;text-transform:none;color:var(--muted);margin-left:5px}
 </style></head><body><main class="shell" id="view-main">
 <header class="header"><h1>ChatGPT Search Tool</h1><div class="actions"><button type="button" id="oi-main-save">Save</button><button type="button" id="oi-main-import">Import</button><button type="button" id="oi-help" class="oi-header-icon" title="Help and guide" aria-label="Help and guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.6 2.6 0 1 1 5 1c0 1.9-2.5 2.1-2.5 3.7"/><path d="M12 17.2h.01"/></svg></button><button type="button" id="oi-settings" class="oi-header-icon" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 2.7h3.4l.6 2.2q.9.25 1.6.65l2.1-.85 2.3 2.3-.85 2.1q.4.7.65 1.6l2.2.6v3.4l-2.2.6q-.25.9-.65 1.6l.85 2.1-2.3 2.3-2.1-.85q-.7.4-1.6.65l-.6 2.2h-3.4l-.6-2.2q-.9-.25-1.6-.65l-2.1.85-2.3-2.3.85-2.1q-.4-.7-.65-1.6l-2.2-.6v-3.4l2.2-.6q.25-.9.65-1.6l-.85-2.1 2.3-2.3 2.1.85q.7-.4 1.6-.65z"/><circle cx="12" cy="12" r="3"/></svg></button></div></header><div id="oi-notice" class="status-notice" hidden><output id="oi-feedback" role="status" aria-live="polite" hidden></output><button type="button" id="oi-dismiss-status" aria-label="Dismiss status">×</button></div><button type="button" id="oi-undo-import" hidden>Undo import</button>
 <section class="card search-card"><div class="search-row"><input class="search-input" type="text" placeholder="Search words or phrases…" aria-label="Search words or phrases"><button class="and" type="button">and</button><button class="or" type="button">or</button></div><div class="term-space"></div></section>
@@ -1776,8 +1791,24 @@ render();
   tabs.onkeydown=e=>{if(!['ArrowLeft','ArrowRight','Home','End'].includes(e.key))return;e.preventDefault();const choices=[...tabs.children],at=choices.indexOf(document.activeElement);const next=e.key==='Home'?0:e.key==='End'?2:(at+(e.key==='ArrowRight'?1:2))%3;choices[next].click();library.querySelectorAll('[role=tab]')[next].focus()};
   heading.append(tabs);const search=el('div','bookmark-search-row');search.append(input,el('span','saved-total',app.research.bookmarks.length+' saved'));header.append(heading,search);
  }
+ function duplicateIndex(){
+  const map=new Map(),key=b=>JSON.stringify([String(b.conversationId),String(b.messageId)]);
+  for(const b of app.research.bookmarks){const k=key(b),group=map.get(k)||[];group.push(b);map.set(k,group)}
+  const signature=b=>[String(b.snippet?.start??''),String(b.snippet?.end??''),String(b.snippet?.text??'')].join('|');
+  return {
+   info(bookmark){
+    const matches=map.get(key(bookmark))||[];
+    if(matches.length<2)return null;
+    const exact=matches.filter(b=>signature(b)===signature(bookmark)).length;
+    return {count:matches.length,exact};
+   },
+   matching(bookmark){return map.get(key(bookmark))||[]}
+  };
+ }
+ window.oiBookmarkDuplicateIndex=duplicateIndex;
  function renderBookmarks(items,scope=null,selectionContext=null){
   if(!items)return;items.replaceChildren();
+  const duplicates=duplicateIndex();
   if(!scope&&bookmarkTab==='folders'){
    if(folderId&&!byFolder(folderId))folderId=null;
    const location=el('div','folder-location');location.append(breadcrumbs(folderId,id=>{folderId=id;showLibrary()}));
@@ -1812,7 +1843,14 @@ render();
    const open=()=>{if(message)window.oiOpenReader(bookmark.conversationId,bookmark.messageId)};
    excerpt.onclick=open;excerpt.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open()}};
    const folder=button('',()=>movePicker({bookmark}));folder.className='ui-icon bookmark-folder';folder.setAttribute('aria-label',bookmark.folderId?'Change bookmark folder':'Assign bookmark folder');folder.setAttribute('aria-pressed',String(Boolean(bookmark.folderId)));folder.title=bookmark.folderId?'Change folder':'Assign folder';folder.append(window.oiGlyph('folder'));
-   heading.append(star,folder,more);card.append(heading,excerpt);
+   heading.append(star,folder,more);card.append(heading);
+   const dupe=duplicates.info(bookmark);
+   if(dupe){
+    const marker=el('span','oi-bookmark-duplicate',dupe.exact>1?'Duplicate · '+dupe.count+' copies':'Same message · '+dupe.count+' bookmarks');
+    marker.title=dupe.exact>1?'Same passage is bookmarked more than once.':'Different bookmarks refer to this source message.';
+    card.append(marker);
+   }
+   card.append(excerpt);
    const expanded=expandedSnippets.has(bookmark.id);excerpt.classList.toggle('expanded-snippet',expanded);
    const toggle=button(expanded?'Show less':'Show more',()=>{const next=!expandedSnippets.has(bookmark.id);if(next)expandedSnippets.add(bookmark.id);else expandedSnippets.delete(bookmark.id);excerpt.classList.toggle('expanded-snippet',next);toggle.textContent=next?'Show less':'Show more';toggle.setAttribute('aria-expanded',String(next))});toggle.className='snippet-toggle';toggle.setAttribute('aria-expanded',String(expanded));toggle.hidden=true;card.append(toggle);
    requestAnimationFrame(()=>{if(card.isConnected){const textHeight=excerpt.scrollHeight,lineHeight=parseFloat(getComputedStyle(excerpt).lineHeight);toggle.hidden=textHeight<=lineHeight*3+2;}});
