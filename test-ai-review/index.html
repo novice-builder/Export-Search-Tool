@@ -332,6 +332,39 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #view-organisation .bookmark-card-footer{display:flex;align-items:center;gap:7px;margin-top:6px}
 #view-organisation .oi-ai-reason-text[aria-expanded=false]{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden}
 #view-organisation .bookmark-folder[aria-pressed=true] svg{fill:currentColor;fill-opacity:.25}
+
+/* Compact Organisation explorer styling (the unified data and AI Review features remain intact). */
+#view-organisation.internal-shell{padding:10px 8px 110px}
+#view-organisation .oi-org-heading{gap:10px;margin-bottom:14px}
+#view-organisation .oi-org-heading h1{font-size:18px}
+#view-organisation .oi-org-back{min-height:38px;margin:0}
+#view-organisation .oi-org-toptools input{border:1px solid var(--line-dark);border-radius:9px;background:var(--card);min-height:44px;padding:9px 12px;margin:0;font:inherit;font-size:16px}
+#view-organisation .oi-org-toptools{margin-bottom:10px}
+#view-organisation .oi-org-quick{margin:0 0 6px}
+#view-organisation .oi-org-quick-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:40px;margin:0;padding:6px 3px;border:0;background:transparent;color:var(--muted);font-size:12px;letter-spacing:.035em;font-weight:700;text-transform:uppercase;text-align:left}
+#view-organisation .oi-org-quick-toggle .oi-org-disclosure{font-size:19px;font-weight:400;transition:transform .15s}
+#view-organisation .oi-org-quick-toggle[aria-expanded=true] .oi-org-disclosure{transform:rotate(90deg)}
+#view-organisation .oi-org-quick-items{padding:2px 0 7px}
+#view-organisation .oi-org-pathbar{display:flex;align-items:center;gap:8px;min-height:44px;margin:4px 0 9px}
+#view-organisation .oi-org-breadcrumbs{display:flex;flex:1;min-width:0;flex-wrap:wrap;align-items:center;gap:3px;font-size:13px}
+#view-organisation .oi-org-breadcrumbs button{background:transparent;border:0;padding:5px 2px;min-height:34px;margin:0;color:var(--ink);font:inherit;font-size:13px;text-align:left;overflow-wrap:anywhere}
+#view-organisation .oi-org-breadcrumbs .oi-org-crumb-separator{color:var(--muted);padding:0 4px;font-size:17px}
+#view-organisation .oi-org-breadcrumbs .oi-org-current{font-weight:600}
+#view-organisation .oi-org-pathactions{display:flex;align-items:center;gap:4px;flex-shrink:0}
+#view-organisation .oi-org-icon-button{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--ink);width:40px;height:40px;min-width:40px;min-height:40px;margin:0;padding:7px;border-radius:8px}
+#view-organisation .oi-org-icon-button .ui-glyph{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+#view-organisation .oi-org-icon-button:focus-visible,#view-organisation .oi-org-quick-toggle:focus-visible,#view-organisation .oi-org-breadcrumbs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#view-organisation .oi-org-selection-info{font-size:12px;color:var(--muted);margin:-2px 2px 8px}
+#view-organisation .oi-org-entry{background:var(--card);min-height:54px;padding:4px 6px;margin:0 0 8px;border:0;border-bottom:1px solid var(--line);border-radius:0}
+#view-organisation .oi-org-item{min-height:48px;padding:7px 5px;gap:12px}
+#view-organisation .oi-org-folder-entry .oi-org-icon{color:var(--ink)}
+#view-organisation .oi-org-icon{width:25px;height:25px}
+#view-organisation .oi-org-icon .ui-glyph{width:23px;height:23px}
+#view-organisation .oi-org-more{border:0;background:transparent;font-size:22px;min-width:38px;min-height:42px;margin:0;padding:4px}
+#view-organisation .oi-org-section{margin:17px 0 8px}
+#view-organisation .oi-org-filter{margin:8px 0 10px;flex-wrap:wrap}
+#view-organisation .oi-org-filter button{margin:0}
+@media(max-width:440px){#view-organisation .oi-org-heading h1{font-size:17px}#view-organisation .oi-org-pathbar{gap:4px}#view-organisation .oi-org-icon-button{width:38px;min-width:38px}}
 </style></head><body><main class="shell" id="view-main">
 <header class="header"><h1>ChatGPT Search Tool</h1><div class="actions"><button type="button" id="oi-main-save">Save</button><button type="button" id="oi-main-import">Import</button><button type="button" id="oi-help" class="oi-header-icon" title="Help and guide" aria-label="Help and guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.6 2.6 0 1 1 5 1c0 1.9-2.5 2.1-2.5 3.7"/><path d="M12 17.2h.01"/></svg></button><button type="button" id="oi-settings" class="oi-header-icon" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 2.7h3.4l.6 2.2q.9.25 1.6.65l2.1-.85 2.3 2.3-.85 2.1q.4.7.65 1.6l2.2.6v3.4l-2.2.6q-.25.9-.65 1.6l.85 2.1-2.3 2.3-2.1-.85q-.7.4-1.6.65l-.6 2.2h-3.4l-.6-2.2q-.9-.25-1.6-.65l-2.1.85-2.3-2.3.85-2.1q-.4-.7-.65-1.6l-2.2-.6v-3.4l2.2-.6q.25-.9.65-1.6l-.85-2.1 2.3-2.3 2.1.85q.7-.4 1.6-.65z"/><circle cx="12" cy="12" r="3"/></svg></button></div></header><div id="oi-notice" class="status-notice" hidden><output id="oi-feedback" role="status" aria-live="polite" hidden></output><button type="button" id="oi-dismiss-status" aria-label="Dismiss status">×</button></div><button type="button" id="oi-undo-import" hidden>Undo import</button>
 <section class="card search-card"><div class="search-row"><input class="search-input" type="text" placeholder="Search words or phrases…" aria-label="Search words or phrases"><button class="and" type="button">and</button><button class="or" type="button">or</button></div><div class="term-space"></div></section>
@@ -2621,7 +2654,7 @@ if(!app||!api||!svc||!view)return;
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};
 const button=(label,action,cls)=>{const n=el('button',cls||'',label);n.type='button';n.onclick=action;return n};
 const nice=n=>Number(n).toLocaleString();
-let at=null,virtual=null,query='',typeFilter='all',selecting=false,shown=new Set(),selected=new Set(),limit=80,loaded=false;
+let at=null,virtual=null,query='',typeFilter='all',selecting=false,shown=new Set(),selected=new Set(),limit=80,loaded=false,quickAccessOpen=false;
 const s=()=>app.research;
 const isChosen=(type,id)=>selected.has(type+':'+id);
 function changedSelection(type,id,checked){
@@ -2641,6 +2674,7 @@ function back(){
 function section(root,label){root.append(el('h2','oi-org-section',label))}
 function organisationGlyph(kind){
  // Original outline paths: bookmarks retain the app's existing ribbon icon.
+ if(kind==='folder')return window.oiGlyph('folder');
  if(kind==='bookmark')return window.oiGlyph('bookmark');
  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
  svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');
@@ -2652,10 +2686,11 @@ function organisationGlyph(kind){
 }
 function entryRow(parent,icon,label,secondary,onOpen,{type,id,more,badge}={}){
  const row=el('div','oi-org-entry');
+ if(type==='folder')row.classList.add('oi-org-folder-entry');
  if(selecting&&type&&id)row.append(checkbox(type,id,label));
  const main=button('',onOpen,'oi-org-item');
  const glyph=el('span','oi-org-icon');
- if(icon==='bookmark'||icon==='list')glyph.append(organisationGlyph(icon));
+ if(icon==='bookmark'||icon==='list'||icon==='folder')glyph.append(organisationGlyph(icon));
  else glyph.textContent=icon;
  glyph.setAttribute('aria-hidden','true');
  const text=el('span','oi-org-item-info');
@@ -2669,21 +2704,75 @@ function entryRow(parent,icon,label,secondary,onOpen,{type,id,more,badge}={}){
  parent.append(row);return row;
 }
 function noResults(root){root.append(el('p','oi-org-empty','No matching items in this location.'))}
-function selectionTools(root){
- const toolbar=el('div','oi-org-toolbar');
- const selectBtn=button(selecting?'Done selecting':'Select',()=>{selecting=!selecting;selected.clear();render(true)});
- const newBtn=button('+ New',()=>newMenu());
- toolbar.append(selectBtn,newBtn);
- if(selecting){
-  toolbar.append(el('span','oi-org-selected',selected.size+' selected'));
-  const all=button(shown.size&&[...shown].every(k=>selected.has(k))?'Deselect all':'Select all',()=>{
-   if([...shown].every(k=>selected.has(k)))for(const key of shown)selected.delete(key);
-   else for(const key of shown)selected.add(key);
-   render(true);
-  });
-  toolbar.append(all);
+
+function compactAction(label,which,action){
+ const b=button('',action,'oi-org-icon-button');b.setAttribute('aria-label',label);b.title=label;
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');svg.classList.add('ui-glyph');
+ const p=document.createElementNS(svg.namespaceURI,'path');
+ p.setAttribute('d',which==='plus'?'M12 5v14 M5 12h14':'M5 12h.01 M12 12h.01 M19 12h.01');
+ if(which==='more')p.setAttribute('stroke-width','3.4');
+ svg.append(p);b.append(svg);return b;
+}
+function optionsMenu(){
+ window.oiDialog('Organisation options',(body,close)=>{
+  body.classList.add('action-menu');
+  body.append(button(selecting?'Done selecting':'Select',()=>{
+   close();selecting=!selecting;selected.clear();render(true);
+  }));
+  if(selecting){
+   body.append(button('Select all visible',()=>{
+    close();for(const key of shown)selected.add(key);render(true);
+   }));
+   body.append(button('Deselect all',()=>{close();selected.clear();render(true)}));
+  }
+  body.append(button('Cancel',close));
+ });
+}
+function pathTools(root){
+ const bar=el('nav','oi-org-pathbar');bar.setAttribute('aria-label','Organisation folder navigation and actions');
+ const breadcrumbs=el('div','oi-org-breadcrumbs');
+ const addCrumb=(label,action,current)=>{
+  if(breadcrumbs.children.length)breadcrumbs.append(el('span','oi-org-crumb-separator','›'));
+  const crumb=button(label,action||(()=>{}),current?'oi-org-current':'');
+  if(current){crumb.disabled=true;crumb.setAttribute('aria-current','location')}
+  breadcrumbs.append(crumb);
+ };
+ if(virtual!==null){
+  addCrumb('All folders',()=>orgFolder(null),false);
+  addCrumb(({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites'}[virtual]||'Organisation'),null,true);
+ }else{
+  if(at===null)addCrumb('All folders',null,true);
+  else{
+   addCrumb('All folders',()=>orgFolder(null),false);
+   const trail=[];let cursor=api.folder(at),seen=new Set();
+   while(cursor&&!seen.has(cursor.id)){seen.add(cursor.id);trail.unshift(cursor);cursor=api.folder(cursor.parentId)}
+   for(const [i,node] of trail.entries())addCrumb(node.name,()=>orgFolder(node.id),i===trail.length-1);
+  }
  }
- root.append(toolbar);
+ const actions=el('div','oi-org-pathactions');
+ actions.append(compactAction('New folder, list or saved search','plus',()=>newMenu()));
+ actions.append(compactAction('More options, including Select','more',()=>optionsMenu()));
+ bar.append(breadcrumbs,actions);root.append(bar);
+ if(selecting)root.append(el('p','oi-org-selection-info',selected.size+' selected · Tap items to select'));
+}
+function quickAccess(root){
+ const host=el('section','oi-org-quick');
+ const toggle=button('',()=>{quickAccessOpen=!quickAccessOpen;render(true)},'oi-org-quick-toggle');
+ toggle.setAttribute('aria-expanded',String(quickAccessOpen));
+ toggle.setAttribute('aria-controls','oi-org-quick-items');
+ toggle.append(el('span','','Quick access'),el('span','oi-org-disclosure','›'));
+ host.append(toggle);
+ if(quickAccessOpen){
+  const items=el('div','oi-org-quick-items');items.id='oi-org-quick-items';
+  const c=api.counts();
+  entryRow(items,'bookmark','All bookmarks',nice(c.bookmarks)+' saved',()=>orgVirtual('bookmarks'));
+  entryRow(items,'list','All conversation lists',nice(c.lists)+' lists',()=>orgVirtual('lists'));
+  entryRow(items,'☆','Favourites',nice(c.favourites)+' starred items',()=>orgVirtual('favourites'));
+  entryRow(items,'◷','Saved searches & history',s().savedSearches.length+' saved searches',()=>window.oiOpenLibrary('searches'));
+  host.append(items);
+ }
+ root.append(host);
 }
 function selectionBar(root){
  if(!selecting||selected.size===0)return;
@@ -2830,12 +2919,11 @@ function chooseFolderMerge(items){
 }
 function folderRows(root,folders){
  if(!folders.length)return;
- section(root,'Folders');
  for(const f of folders){
   shown.add('folder:'+f.id);
   const inside=s().folders.filter(x=>x.parentId===f.id).length+
    s().lists.filter(x=>x.folderId===f.id).length+s().bookmarks.filter(x=>x.folderId===f.id).length;
-  entryRow(root,'▱',f.name,inside+' direct item(s)',()=>orgFolder(f.id),{type:'folder',id:f.id,more:()=>folderActions(f)});
+  entryRow(root,'folder',f.name,inside+' direct item(s)',()=>orgFolder(f.id),{type:'folder',id:f.id,more:()=>folderActions(f)});
  }
 }
 function listRows(root,lists){
@@ -2870,37 +2958,21 @@ function render(keepScroll=false){
  view.replaceChildren();
  shown=new Set();
  if(!loaded){loaded=true;api.organiseExistingAILists()}
+
  const header=el('header','oi-org-header');
  const top=el('div','oi-org-heading');
- top.append(button('← Back',back));
- top.append(el('h1','',virtual?({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites'}[virtual]||'Organisation'):at?(api.folder(at)?.name||'Folder'):'Organisation'));
- header.append(top);
- const subtitle=el('div','oi-org-subtitle');
- if(virtual||at!==null){
-  subtitle.append(button('Organisation',()=>orgFolder(null)));
-  if(at!==null){
-   const nodes=[];let curr=api.folder(at),seen=new Set();
-   while(curr&&!seen.has(curr.id)){seen.add(curr.id);nodes.unshift(curr);curr=api.folder(curr.parentId)}
-   for(const node of nodes)subtitle.append(el('span','',' › '),button(node.name,()=>orgFolder(node.id)));
-  }else subtitle.append(el('span','',' › '+({bookmarks:'All bookmarks',lists:'All lists',favourites:'Favourites'}[virtual]||'')));
- }else subtitle.append(el('span','','Folders, bookmarks, lists and saved searches'));
- header.append(subtitle);view.append(header);
+ top.append(button('← Back',back,'oi-org-back'));
+ top.append(el('h1','',virtual?({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites'}[virtual]||'Organisation'):'Organisation'));
+ header.append(top);view.append(header);
  const tools=el('div','oi-org-toptools');
  const search=el('input');search.type='search';search.placeholder='Search organisation…';search.value=query;search.setAttribute('aria-label','Search within Organisation');
  search.oninput=()=>{const pos=search.selectionStart;query=search.value;render(true);requestAnimationFrame(()=>{const next=view.querySelector('input[type=search]');next?.focus();next?.setSelectionRange(pos,pos)})};
  tools.append(search);view.append(tools);
- selectionTools(view);
- if(virtual===null&&at===null){
-  section(view,'Quick access');
-  const c=api.counts();
-  entryRow(view,'bookmark','All bookmarks',nice(c.bookmarks)+' saved',()=>orgVirtual('bookmarks'));
-  entryRow(view,'list','All conversation lists',nice(c.lists)+' lists',()=>orgVirtual('lists'));
-  entryRow(view,'☆','Favourites',nice(c.favourites)+' starred items',()=>orgVirtual('favourites'));
-  entryRow(view,'◷','Saved searches & history',s().savedSearches.length+' saved searches',()=>window.oiOpenLibrary('searches'));
- }
- if(virtual===null){
+ if(virtual===null&&at===null)quickAccess(view);
+ pathTools(view);
+ if(virtual===null&&at!==null){
   const toggles=el('div','oi-org-filter');
-  if(at!==null)for(const [id,label] of [['all','All'],['lists','Lists'],['bookmarks','Bookmarks']]){
+  for(const [id,label] of [['all','All'],['lists','Lists'],['bookmarks','Bookmarks']]){
    const b=button(label,()=>{typeFilter=id;render(true)});
    b.setAttribute('aria-pressed',String(typeFilter===id));toggles.append(b);
   }
@@ -2929,7 +3001,7 @@ function render(keepScroll=false){
  if(keepScroll)requestAnimationFrame(()=>window.scrollTo(0,scroll));
 }
 window.oiOpenOrganisation=()=>{
- at=null;virtual=null;query='';typeFilter='all';limit=80;selecting=false;selected.clear();
+ at=null;virtual=null;query='';typeFilter='all';limit=80;selecting=false;quickAccessOpen=false;selected.clear();
  render();window.oiNavigate('organisation');
 };
 document.getElementById('oi-open-organisation')?.addEventListener('click',()=>window.oiOpenOrganisation());
