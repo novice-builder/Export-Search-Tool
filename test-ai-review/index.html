@@ -290,7 +290,8 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #view-organisation .oi-org-entry{display:flex;align-items:center;gap:4px;min-height:55px;border-bottom:1px solid var(--line);padding:5px 2px}
 #view-organisation .oi-org-entry>input[type=checkbox]{margin:0 7px 0 4px;width:20px;height:20px}
 #view-organisation .oi-org-item{min-width:0;flex:1;display:flex;gap:12px;align-items:center;text-align:left;border:0;background:transparent;padding:7px 4px;white-space:normal;color:var(--ink);min-height:40px}
-#view-organisation .oi-org-icon{width:26px;flex-shrink:0;font-size:22px;color:var(--muted)}
+#view-organisation .oi-org-icon{width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;font-size:22px;color:var(--muted)}
+#view-organisation .oi-org-icon .ui-glyph{width:23px;height:23px;display:block;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 #view-organisation .oi-org-item-info{display:block;min-width:0;flex:1}
 #view-organisation .oi-org-item-info strong{font-size:14px;overflow-wrap:anywhere}
 #view-organisation .oi-org-item-info small{font-size:11px;display:block;color:var(--muted);margin-top:3px}
@@ -2638,11 +2639,25 @@ function back(){
  if(window.oiBack)window.oiBack();else window.oiShowMainView();
 }
 function section(root,label){root.append(el('h2','oi-org-section',label))}
+function organisationGlyph(kind){
+ // Original outline paths: bookmarks retain the app's existing ribbon icon.
+ if(kind==='bookmark')return window.oiGlyph('bookmark');
+ const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
+ svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');
+ svg.classList.add('ui-glyph');
+ const path=document.createElementNS(svg.namespaceURI,'path');
+ path.setAttribute('d','M5.5 2.8H15l3.5 3.5V21H5.5Z M15 2.8v4h3.5 M9 10h6.5 M9 13.7h6.5 M9 17.4h6.5');
+ svg.append(path);
+ return svg;
+}
 function entryRow(parent,icon,label,secondary,onOpen,{type,id,more,badge}={}){
  const row=el('div','oi-org-entry');
  if(selecting&&type&&id)row.append(checkbox(type,id,label));
  const main=button('',onOpen,'oi-org-item');
- const glyph=el('span','oi-org-icon',icon);glyph.setAttribute('aria-hidden','true');
+ const glyph=el('span','oi-org-icon');
+ if(icon==='bookmark'||icon==='list')glyph.append(organisationGlyph(icon));
+ else glyph.textContent=icon;
+ glyph.setAttribute('aria-hidden','true');
  const text=el('span','oi-org-item-info');
  text.append(el('strong','',label));
  if(secondary)text.append(el('small','',secondary));
@@ -2829,7 +2844,7 @@ function listRows(root,lists){
  for(const item of lists){
   shown.add('list:'+item.id);
   const descriptor=(item.members||[]).length+' conversations'+(item.slot!=null?' · Quick button '+item.slot:'')+(item.favourite?' · Favourite':'');
-  entryRow(root,'☷',item.name,descriptor,()=>window.oiOpenLibrary('list',item.id),{type:'list',id:item.id,more:()=>listActions(item)});
+  entryRow(root,'list',item.name,descriptor,()=>window.oiOpenLibrary('list',item.id),{type:'list',id:item.id,more:()=>listActions(item)});
  }
 }
 function bookmarksSection(root,bookmarks){
@@ -2878,8 +2893,8 @@ function render(keepScroll=false){
  if(virtual===null&&at===null){
   section(view,'Quick access');
   const c=api.counts();
-  entryRow(view,'♧','All bookmarks',nice(c.bookmarks)+' saved',()=>orgVirtual('bookmarks'));
-  entryRow(view,'☷','All conversation lists',nice(c.lists)+' lists',()=>orgVirtual('lists'));
+  entryRow(view,'bookmark','All bookmarks',nice(c.bookmarks)+' saved',()=>orgVirtual('bookmarks'));
+  entryRow(view,'list','All conversation lists',nice(c.lists)+' lists',()=>orgVirtual('lists'));
   entryRow(view,'☆','Favourites',nice(c.favourites)+' starred items',()=>orgVirtual('favourites'));
   entryRow(view,'◷','Saved searches & history',s().savedSearches.length+' saved searches',()=>window.oiOpenLibrary('searches'));
  }
