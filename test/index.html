@@ -634,7 +634,7 @@ function textOf(v){if(typeof v==='string')return v;if(Array.isArray(v))return v.
  document.querySelector('.view-btn').textContent=window.oiGetCommittedGroups().length?'View matches':'View messages';
  $('oi-message-total').textContent=(counts?counts.messages:data.entries.reduce((n,e)=>n+(Array.isArray(e.messages)?e.messages.length:0),0)).toLocaleString()+' messages';
 }
-$('theme').onclick=()=>{data.accent=data.accent==='dark'?'blue':'dark';theme();msg('Button colour updated. Save/share HTML to preserve preference.',{kind:'success'})};$('clear').onclick=()=>window.oiConfirm('Clear imported conversations?','Imported source data will be cleared; research records remain.','Clear conversations',()=>{data.entries=[];data.imports=[];render();msg('Cleared. Save/share HTML to preserve the empty archive.',{kind:'success'})});
+$('theme').onclick=()=>{data.accent=data.accent==='dark'?'blue':'dark';theme();msg('Button colour updated. Save/share HTML to preserve preference.',{kind:'success'})};$('clear').onclick=()=>window.oiConfirm('Clear imported conversations?','Imported source data will be cleared; research records remain.','Clear conversations',()=>{data.entries=[];data.imports=[];render();window.dispatchEvent(new Event('oi-archive-change'));msg('Conversations cleared. Local saving will preserve this change.',{kind:'success'})});
 let previousArchive=null;
 async function addFiles(files,alreadyLocked=false){
  if(busy&&!alreadyLocked)return;
@@ -654,9 +654,9 @@ async function addFiles(files,alreadyLocked=false){
   data.entries=entries;data.imports=imports;registerProjects(entries);
   invalidateSave();render();window.dispatchEvent(new Event('oi-archive-change'));
   $('oi-undo-import').hidden=!previousArchive.entries.length;
-  msg('Imported '+entries.length.toLocaleString()+' conversations · '+entries.reduce((n,e)=>n+e.messages.length,0).toLocaleString()+' messages · '+processed+' JSON file(s).'+(entries.some(e=>e.project)?' '+new Set(entries.map(e=>e.project).filter(Boolean)).size+' projects.':' No project IDs found; see Help for checked metadata fields.'),{kind:'success',code:'IMPORT FINISHED'});
+  msg('Imported '+entries.length.toLocaleString()+' conversations · '+entries.reduce((n,e)=>n+e.messages.length,0).toLocaleString()+' messages · '+processed+' JSON file(s).'+(entries.some(e=>e.project)?' '+new Set(entries.map(e=>e.project).filter(Boolean)).size+' projects.':' No project IDs found; see Help for checked metadata fields.'),{kind:'success',code:'IMPORT FINISHED'});return true;
  }catch(error){
-  msg('IMPORT FAILED: '+(error.message||String(error))+'. Previous archive retained; no partial replacement.',{kind:'error'});
+  msg('IMPORT FAILED: '+(error.message||String(error))+'. Previous archive retained; no partial replacement.',{kind:'error'});return false;
  }finally{busy=false;stageButtons();}
 }
 $('oi-undo-import').onclick=()=>{
@@ -718,15 +718,19 @@ function u16(v,p){return v.getUint16(p,true)}function u32(v,p){return v.getUint3
  }
 }
 async function importSelectedZip(f){
- if(!f||busy)return;
+ if(!f||busy)return false;
+ window.oiPwaTest?.beginSourceImport?.();
  busy=true;
  try{
   msg('Import 1/5: scanning export ZIP '+f.name+'…');const state={files:[],nested:0};await unzip(f,f.name,0,state);
   if(!state.files.length)throw Error('No conversations JSON files found in this ZIP or its nested ZIPs');
   msg('Found '+state.files.length+' conversation JSON files in '+(state.nested+1)+' ZIP archive(s). Importing…');
-  await addFiles(state.files,true);
+  const imported=await addFiles(state.files,true);
+  if(!imported)throw Error('Conversation files could not be imported');
   $('status').textContent+='\nZIP archives scanned: '+(state.nested+1)+' (including '+state.nested+' nested).';
- }catch(err){msg('ZIP IMPORT FAILED: '+err.message+'. Previous archive retained.',{kind:'error'})}finally{busy=false;stageButtons()}
+  await window.oiPwaTest?.saveSourceImport?.('source-zip',f,data.entries.length);
+  return true;
+ }catch(err){msg('ZIP IMPORT FAILED: '+err.message+'. Previous archive retained.',{kind:'error'});return false}finally{window.oiPwaTest?.endSourceImport?.();busy=false;stageButtons()}
 }
 $('zip').addEventListener('change',async e=>{const f=e.target.files?.[0];e.target.value='';if(f)await importSelectedZip(f)});
 function yieldUI(){return new Promise(r=>setTimeout(r,25))}
@@ -782,12 +786,13 @@ $('oi-main-save').addEventListener('click',async()=>{
  }}finally{document.querySelector('main.shell').inert=false;}
 });
 $('oi-main-import').addEventListener('click',()=>$('oi-import-picker').click());
-$('oi-import-picker').addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;if(/\.zip$/i.test(f.name)){await importSelectedZip(f)}else if(/\.json$/i.test(f.name))await addFiles([f]);else if(/\.html?$/i.test(f.name)&&window.oiImportSavedHtml)await window.oiImportSavedHtml(f);else window.oiAlert('Unsupported file','Select a saved Search Tool HTML, ChatGPT export ZIP or conversation JSON file.');});
+$('oi-import-picker').addEventListener('change',async e=>{const f=e.target.files&&e.target.files[0];e.target.value='';if(!f)return;if(/\.zip$/i.test(f.name)){await importSelectedZip(f)}else if(/\.json$/i.test(f.name)){window.oiPwaTest?.beginSourceImport?.();try{if(await addFiles([f]))await window.oiPwaTest?.saveSourceImport?.('source-json',f,data.entries.length)}finally{window.oiPwaTest?.endSourceImport?.()}}else if(/\.html?$/i.test(f.name)&&window.oiImportSavedHtml)await window.oiImportSavedHtml(f);else window.oiAlert('Unsupported file','Select a saved Search Tool HTML, ChatGPT export ZIP or conversation JSON file.');});
 $('files').addEventListener('change',invalidateSave,true);
 $('zip').addEventListener('change',invalidateSave,true);
 $('clear').addEventListener('click',invalidateSave,true);
 $('theme').addEventListener('click',invalidateSave,true);
 window.oiArchive={
+ async restoreFromSource(kind,f){if(kind==='source-zip')return await importSelectedZip(f);if(kind==='source-json')return await addFiles([f]);throw Error('Unknown saved source type')},
  loadLocal(payload){
   if(!payload||!Array.isArray(payload.entries))throw Error('Invalid locally stored archive');
   const restored=hydratePortableData(payload);
@@ -798,7 +803,7 @@ window.oiArchive={
   invalidateSave();render();
   window.dispatchEvent(new Event('oi-archive-change'));
  },
- get entries(){return data.entries},get research(){return data.research},get config(){return searchConfig},listFilter,
+ get entries(){return data.entries},get imports(){return data.imports},get accent(){return data.accent},get research(){return data.research},get config(){return searchConfig},listFilter,
  changed(){invalidateSave();render();window.dispatchEvent(new Event('oi-research-change'))},
  refresh:render,report:msg,dismissNotice,projectLabel,projectDiagnostic,captureWorkspace,restoreWorkspace,createPortableData,
  ready:false
@@ -1696,4 +1701,4 @@ window.oiBuildEvidenceExport=choice=>{
  return {payload,file:new File([text],'ChatGPT_Search_Results.'+extension,{type:type+';charset=utf-8'})};
 };
 
-</script><script data-local-persistence src="./local-persistence.js?v=2"></script><script data-saved-html-import src="./saved-html-import.js?v=2"></script></body></html>
+</script><script data-local-persistence src="./local-persistence.js?v=3"></script><script data-saved-html-import src="./saved-html-import.js?v=3"></script></body></html>

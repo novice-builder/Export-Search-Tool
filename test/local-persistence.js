@@ -17,6 +17,7 @@
  let timer=null;
  let dbPromise=null;
  let lastError=null;
+ let sourceImporting=false;
  const status=document.createElement('span');
  status.id='oi-device-storage-status';
  status.setAttribute('role','status');
@@ -63,6 +64,28 @@
   const body=await new Response(new Blob([json],{type:'application/json'}).stream().pipeThrough(new CompressionStream('gzip'))).blob();
   return {encoding:'gzip',body};
  }
+ async function encodeLiveArchive(){
+  if(typeof CompressionStream==='undefined')throw Error('On-device gzip compression unavailable');
+  const encoder=new TextEncoder();
+  const all=app.entries;
+  const header=JSON.stringify({schema:'oi-linked-messages-v2',accent:app.accent,imports:app.imports,research:app.research,workspace:app.captureWorkspace()});
+  const prefix=header.slice(0,-1)+',"entries":[';
+  let index=-1;
+  const stream=new ReadableStream({async pull(controller){
+   if(index===-1){index=0;controller.enqueue(encoder.encode(prefix));return}
+   if(index<all.length){
+    const entry=all[index];
+    const serialized=entry.source?(({messages,_text,...rest})=>rest)(entry):(({_text,...rest})=>rest)(entry);
+    controller.enqueue(encoder.encode((index?',':'')+JSON.stringify(serialized)));
+    index++;
+    if(index%10===0)await new Promise(resolve=>setTimeout(resolve,0));
+    return;
+   }
+   controller.enqueue(encoder.encode(']}'));controller.close();
+  }});
+  const body=await new Response(stream.pipeThrough(new CompressionStream('gzip'))).blob();
+  return {encoding:'gzip',body};
+ }
  async function decode(stored){
   if(!stored) return null;
   let json;
@@ -88,8 +111,7 @@
     pendingArchive=false;pendingState=false;
     show('saving on this device…');
     if(writingArchive){
-     const payload=app.createPortableData();
-     const encoded=await encode(payload);
+     const encoded=await encodeLiveArchive();
      const now=Date.now();
      const latest={research:structuredClone(app.research),workspace:app.captureWorkspace(),savedAt:now};
      await putBoth({...encoded,savedAt:now},latest);
@@ -107,7 +129,7 @@
   } finally {working=false;}
  }
  function schedule(archive){
-  if(!active)return;
+  if(!active||sourceImporting)return;
   if(archive)pendingArchive=true;
   pendingState=true;
   if(lastError)lastError=null;
@@ -116,7 +138,7 @@
   timer=setTimeout(flush,archive?200:650);
  }
  window.addEventListener('oi-research-change',()=>schedule(false));
- window.addEventListener('oi-archive-change',()=>{if(active)schedule(true);else if(app.ready)void restore()});
+ window.addEventListener('oi-archive-change',()=>{if(sourceImporting)return;if(active)schedule(true);else if(app.ready)void restore()});
  // Restore happens exactly once. An empty hosted page never overwrites stored data.
  let started=false;
  async function restore(){
@@ -126,12 +148,21 @@
    show('checking this device…');
    const [savedArchive,savedState]=await Promise.all([get(ARCHIVE_KEY),get(STATE_KEY)]);
    if(savedArchive || savedState){
-    show('restoring saved conversations…');
-    const archive=await decode(savedArchive);
-    const payload=archive||{schema:'oi-linked-messages-v2',entries:[],imports:[],accent:'blue',research:{}};
-    if(savedState){payload.research=savedState.research||{};payload.workspace=savedState.workspace||payload.workspace;}
-    app.loadLocal(payload);
-    show('restored '+app.entries.length.toLocaleString()+' conversations');
+    if(savedArchive?.encoding==='source-zip'||savedArchive?.encoding==='source-json'){
+     show('reloading conversations from locally saved '+(savedArchive.encoding==='source-zip'?'ZIP':'JSON')+'…');
+     app.loadLocal({schema:'oi-linked-messages-v2',entries:[],imports:[],accent:savedArchive.accent||'blue',research:savedState?.research||{},workspace:savedState?.workspace});
+     const source=new File([savedArchive.body],savedArchive.filename||'saved-export.zip',{type:savedArchive.body.type||'application/octet-stream'});
+     const ok=await app.restoreFromSource(savedArchive.encoding,source);
+     if(!ok||app.entries.length!==savedArchive.count)throw Error('Could not restore all '+savedArchive.count+' saved conversations');
+     show('restored '+app.entries.length.toLocaleString()+' conversations from saved '+(savedArchive.encoding==='source-zip'?'ZIP':'JSON'));
+    }else{
+     show('restoring saved conversations…');
+     const archive=await decode(savedArchive);
+     const payload=archive||{schema:'oi-linked-messages-v2',entries:[],imports:[],accent:'blue',research:{}};
+     if(savedState){payload.research=savedState.research||{};payload.workspace=savedState.workspace||payload.workspace;}
+     app.loadLocal(payload);
+     show('restored '+app.entries.length.toLocaleString()+' conversations');
+    }
    }else show('ready · no saved archive');
    active=true;
   }catch(error){
@@ -189,6 +220,30 @@
    importing=false;
   }
  }
+ function beginSourceImport(){
+  sourceImporting=true;
+  if(timer){clearTimeout(timer);timer=null;}
+  pendingArchive=false;pendingState=false;
+ }
+ async function saveSourceImport(kind,file,count){
+  if(!active)return;
+  if(!['source-zip','source-json'].includes(kind)||!file||!Number.isInteger(count))throw Error('Invalid imported file');
+  while(working)await new Promise(resolve=>setTimeout(resolve,50));
+  show('saving original '+(kind==='source-zip'?'ZIP':'JSON')+' file on this device…');
+  const now=Date.now();
+  const record={encoding:kind,body:file,filename:file.name,accent:app.accent,count,savedAt:now};
+  const state={research:structuredClone(app.research),workspace:app.captureWorkspace(),savedAt:now};
+  try{
+   await putBoth(record,state);
+   lastError=null;
+   show('saved '+count.toLocaleString()+' conversations (original export retained locally)');
+  }catch(error){
+   lastError=error;
+   show('SAVE FAILED — imported conversations may disappear on restart ('+(error?.name||'error')+')',true);
+   console.error('Saving original ZIP/JSON failed:',error);
+  }
+ }
+ function endSourceImport(){sourceImporting=false;}
  if(app.ready)void restore();
  // Basic service worker: only caches the public application files, never imported content.
  if('serviceWorker' in navigator){
@@ -196,5 +251,5 @@
    navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(e=>console.warn('Offline cache unavailable:',e));
   },{once:true});
  }
- window.oiPwaTest={get status(){return status.textContent},flush:()=>flush(),get ready(){return active},importPayload};
+ window.oiPwaTest={get status(){return status.textContent},flush:()=>flush(),get ready(){return active},importPayload,beginSourceImport,saveSourceImport,endSourceImport};
 })();
