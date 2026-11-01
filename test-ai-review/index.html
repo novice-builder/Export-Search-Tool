@@ -349,7 +349,7 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #view-organisation .oi-org-breadcrumbs{display:flex;flex:1;min-width:0;flex-wrap:wrap;align-items:center;gap:3px;font-size:13px}
 #view-organisation .oi-org-breadcrumbs button{background:transparent;border:0;padding:5px 2px;min-height:34px;margin:0;color:var(--ink);font:inherit;font-size:13px;text-align:left;overflow-wrap:anywhere}
 #view-organisation .oi-org-breadcrumbs .oi-org-crumb-separator{color:var(--muted);padding:0 4px;font-size:17px}
-#view-organisation .oi-org-breadcrumbs .oi-org-current{font-weight:600}
+#view-organisation .oi-org-breadcrumbs .oi-org-current{font-weight:600;padding:5px 2px;font-size:13px;overflow-wrap:anywhere}
 #view-organisation .oi-org-pathactions{display:flex;align-items:center;gap:4px;flex-shrink:0}
 #view-organisation .oi-org-icon-button{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--ink);width:40px;height:40px;min-width:40px;min-height:40px;margin:0;padding:7px;border-radius:8px}
 #view-organisation .oi-org-icon-button .ui-glyph{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -2734,9 +2734,8 @@ function pathTools(root){
  const breadcrumbs=el('div','oi-org-breadcrumbs');
  const addCrumb=(label,action,current)=>{
   if(breadcrumbs.children.length)breadcrumbs.append(el('span','oi-org-crumb-separator','›'));
-  const crumb=button(label,action||(()=>{}),current?'oi-org-current':'');
-  if(current){crumb.disabled=true;crumb.setAttribute('aria-current','location')}
-  breadcrumbs.append(crumb);
+  if(current){const crumb=el('span','oi-org-current',label);crumb.setAttribute('aria-current','location');breadcrumbs.append(crumb)}
+  else breadcrumbs.append(button(label,action));
  };
  if(virtual!==null){
   addCrumb('All folders',()=>orgFolder(null),false);
@@ -2970,13 +2969,14 @@ function render(keepScroll=false){
  tools.append(search);view.append(tools);
  if(virtual===null&&at===null)quickAccess(view);
  pathTools(view);
+ let innerFilters=null;
  if(virtual===null&&at!==null){
   const toggles=el('div','oi-org-filter');
   for(const [id,label] of [['all','All'],['lists','Lists'],['bookmarks','Bookmarks']]){
    const b=button(label,()=>{typeFilter=id;render(true)});
    b.setAttribute('aria-pressed',String(typeFilter===id));toggles.append(b);
   }
-  view.append(toggles);
+  innerFilters=toggles;
  }
  const folderItems=virtual===null?s().folders.filter(f=>f.parentId===at&&searchFilter(f)).sort((a,b)=>a.name.localeCompare(b.name)):[];
  const listItems=s().lists.filter(l=>
@@ -2987,6 +2987,7 @@ function render(keepScroll=false){
   (virtual==='bookmarks'||virtual==='favourites'||typeFilter!=='lists')&&searchFilter(b)).sort((a,b)=>(a.title||a.sourceTitle||'').localeCompare(b.title||b.sourceTitle||''));
  if(!virtual&&at!==null)folderItems.length&&folderRows(view,folderItems);
  else if(!virtual&&at===null)folderRows(view,folderItems);
+ if(innerFilters)view.append(innerFilters);
  listRows(view,listItems);
  bookmarksSection(view,bookmarkItems);
  if(!folderItems.length&&!listItems.length&&!bookmarkItems.length)noResults(view);
