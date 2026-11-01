@@ -11,7 +11,7 @@ const aiLabel=v=>/^AI\s*[-–—:]\s*/i.test(v)?v:'AI - '+v;
 const name=(v,fallback)=>aiLabel(clean(v,95)||fallback);
 const same=(a,b)=>String(a).toLowerCase()===String(b).toLowerCase();
 const key=()=> 'research-'+Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16)).join('-');
-const template={schema:SCHEMA,reviewLabel:'Example review',lists:[{label:'Funding concerns',conversationIds:['EXACT_CONVERSATION_ID'],snippets:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',quote:'EXACT RELEVANT WORDS FROM INSIDE THE ORIGINAL MESSAGE'}]}],bookmarks:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',title:'Important funding discrepancy',group:'Funding/Discrepancies',quote:'EXACT RELEVANT WORDS FROM THE SOURCE MESSAGE',description:'Optional reasoning'}]};
+const template={schema:SCHEMA,reviewLabel:'Example review',lists:[{label:'Funding concerns',conversationIds:['EXACT_CONVERSATION_ID'],snippets:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',quote:'EXACT RELEVANT WORDS FROM INSIDE THE ORIGINAL MESSAGE',reason:'Short explanation of why this passage is relevant to the review objective'}]}],bookmarks:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',title:'Important funding discrepancy',group:'Funding/Discrepancies',quote:'EXACT RELEVANT WORDS FROM THE SOURCE MESSAGE',reason:'Short explanation of why this bookmark matters'}]};
 function choose(){if(busy){window.oiAlert('Import in progress','Wait until the current AI review import finishes.');return}picker.value='';picker.click()}
 function reviewInstructions(){
  return [
@@ -21,9 +21,10 @@ function reviewInstructions(){
  'ONLY if the user explicitly requests comprehensive organisation, categorise all reviewed conversations in meaningful lists. Even then, do not create arbitrary bookmarks for every message.',
  'Do not equate repeated discussion with independent corroboration, and do not invent findings. Preserve source wording and distinguish observations from interpretations in descriptions.',
  'Return ONE downloadable JSON with schema "'+SCHEMA+'" and arrays "lists" and "bookmarks" (empty arrays allowed), and optional "reviewLabel".',
- 'Each list needs a short "label" and "conversationIds" array containing only EXACT source IDs. To show useful evidence for each included conversation, add "snippets": [{"conversationId":"EXACT_ID","messageId":"EXACT_ID","quote":"EXACT VERBATIM PASSAGE"}]. Include only relevant list-specific snippets.',
+ 'Each list needs a short "label" and "conversationIds" array containing only EXACT source IDs. For each useful conversation, include an entry under "snippets": [{"conversationId":"EXACT_ID","messageId":"EXACT_ID","quote":"EXACT VERBATIM PASSAGE","reason":"Why this conversation is relevant to this particular list"}]. Include only relevant list-specific snippets.',
  'The quote MUST copy a meaningful passage from the MIDDLE of the actual message when that is where the useful evidence begins. NEVER default to the first words merely because they start the message. Choose enough exact original text to convey the point; do not paraphrase or add leading ellipses. A message can supply different snippets for different lists.',
- 'Each bookmark needs exact "conversationId" and "messageId", a concise "title", and a "group" (use / for nested folders), plus "quote" of the relevant original passage and optional "description". Bookmarks should identify specific useful messages, not simply duplicate every list membership.',
+ 'Each bookmark needs exact "conversationId" and "messageId", a concise "title", and a "group" (use / for nested folders), plus "quote" of the original passage and "reason" for selecting it. Bookmarks should identify specific useful messages, not simply duplicate every list membership.',
+ 'Write a short, specific "reason" for each selected list conversation and bookmark, ideally one sentence of about 12–35 words. Explain WHY this material matters to the requested review objective, not merely what the conversation title says. Ground reasons in the provided passage and distinguish AI interpretation from source evidence. Avoid generic praise and unsupported assumptions.',
  'Do NOT invent or alter IDs, guess quotations or turn conversation titles into IDs. If a quote cannot be verified verbatim, omit that snippet rather than inventing one.',
  'The importer will validate IDs and verbatim quotes against original messages and preserve manually edited snippets. Reply only with the JSON file, not prose outside the file.',
  'Example:',JSON.stringify(template,null,2)
@@ -57,7 +58,7 @@ function apply(doc){
  const all=new Map(app.entries.map(e=>[String(e.id),e]));
  const research=app.research;
  for(const key of ['lists','bookmarks','folders'])if(!Array.isArray(research[key]))throw Error('Research records unavailable');
- const count={newLists:0,updatedLists:0,addedMembers:0,newSnippets:0,unverifiedSnippets:0,newBookmarks:0,newFolders:0,existingBookmarks:0,missingConversations:0,missingMessages:0,invalid:0};
+ const count={newLists:0,updatedLists:0,addedMembers:0,newSnippets:0,updatedReasons:0,unverifiedSnippets:0,newBookmarks:0,newFolders:0,existingBookmarks:0,missingConversations:0,missingMessages:0,invalid:0};
  const stamp=new Date().toISOString(),meta=(kind,label)=>({schema:SCHEMA,kind,reviewLabel:doc.reviewLabel,requestedLabel:label,importedAt:stamp});
  function verifySpan(message,details){
  if(!message||typeof message.text!=='string'||!details||typeof details!=='object')return null;
@@ -106,8 +107,12 @@ function apply(doc){
    const span=verifySpan(message,pick);
    if(!span){count.unverifiedSnippets++;continue}
    const current=list.snippets[cid];
-   if(current?.messageId===mid&&current?.snippet?.text===span.text)continue;
-   list.snippets[cid]={messageId:mid,snippet:span,manual:false,note:clean(pick.description||pick.reason||'',600),aiReview:meta('list-snippet',label)};
+   const reason=clean(pick.reason||pick.description||pick.note||'',350);
+   if(current?.messageId===mid&&current?.snippet?.text===span.text){
+    if(reason&&current.note!==reason&&!current.manualReason){current.note=reason;count.updatedReasons++}
+    continue;
+   }
+   list.snippets[cid]={messageId:mid,snippet:span,manual:false,note:reason,aiReview:meta('list-snippet',label)};
    count.newSnippets++;
   }
  }
@@ -137,7 +142,7 @@ function apply(doc){
   research.bookmarks.push({
    id:key(),conversationId:cid,messageId:mid,folderId:parent.id,favourite:false,
    title:name(item.title||item.label,'Message from '+clean(conv.title,55)),
-   description:clean(item.description||item.note||item.reason||'',1200),
+   description:clean(item.reason||item.description||item.note||'',350),
    sourceTitle:conv.title,snippet:excerpt,originalSnippet:structuredClone(excerpt),aiReview:meta('bookmark')
   });
   bookmarkIds.add(bookmarkKey);count.newBookmarks++;
@@ -155,12 +160,12 @@ async function load(file){
   const data=parse(JSON.parse(await file.text()));
   modified=true;
   const totals=apply(data);
-  if(totals.newLists||totals.updatedLists||totals.newBookmarks){
+  if(totals.newLists||totals.updatedLists||totals.newBookmarks||totals.updatedReasons){
    await storage.persistAIReview();app.changed();
   }
   const message=[
    totals.newLists+' AI lists created; '+totals.updatedLists+' existing AI lists updated',
-   totals.addedMembers+' conversation assignments added; '+totals.newSnippets+' verified source passages selected',
+   totals.addedMembers+' conversation assignments added; '+totals.newSnippets+' verified source passages selected; '+totals.updatedReasons+' AI explanations refreshed',
    totals.newBookmarks+' AI bookmarks added; '+totals.newFolders+' AI folders created',
    totals.existingBookmarks+' already-bookmarked messages left unchanged',
    (totals.missingConversations+totals.missingMessages+totals.invalid)+' recommendations skipped (missing/unknown IDs or invalid); '+totals.unverifiedSnippets+' passages omitted because exact text could not be verified'

@@ -263,6 +263,13 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #oi-action-dialog .oi-message-chooser input{width:100%;font-size:16px}
 #oi-action-dialog .oi-message-options{display:grid;gap:7px;max-height:50vh;overflow:auto}
 #oi-action-dialog .oi-message-options button{display:block;text-align:left;white-space:normal;min-height:42px;overflow-wrap:anywhere}
+
+/* AI explanations are clearly distinct from verbatim source excerpts. */
+#view-library .oi-ai-reason{margin:10px 0 3px;border-top:1px solid var(--line);padding-top:9px;color:var(--muted);font-size:12px;line-height:1.45}
+#view-library .oi-ai-reason-label{font-size:11px;font-weight:700;color:var(--muted);display:block;margin-bottom:3px;letter-spacing:.01em}
+#view-library .oi-ai-reason p{margin:0;white-space:pre-wrap;overflow-wrap:anywhere}
+#view-library .oi-ai-reason .oi-ai-reason-text{font-size:12px;line-height:1.45;margin:0;padding:0;min-height:0;border:0;background:transparent;color:var(--muted);text-align:left;white-space:pre-wrap;overflow-wrap:anywhere;cursor:pointer}
+#view-library .oi-ai-reason .oi-ai-reason-text[aria-expanded=false]{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:3;overflow:hidden;white-space:pre-wrap}
 </style></head><body><main class="shell" id="view-main">
 <header class="header"><h1>ChatGPT Search Tool</h1><div class="actions"><button type="button" id="oi-main-save">Save</button><button type="button" id="oi-main-import">Import</button><button type="button" id="oi-help" class="oi-header-icon" title="Help and guide" aria-label="Help and guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.6 2.6 0 1 1 5 1c0 1.9-2.5 2.1-2.5 3.7"/><path d="M12 17.2h.01"/></svg></button><button type="button" id="oi-settings" class="oi-header-icon" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 2.7h3.4l.6 2.2q.9.25 1.6.65l2.1-.85 2.3 2.3-.85 2.1q.4.7.65 1.6l2.2.6v3.4l-2.2.6q-.25.9-.65 1.6l.85 2.1-2.3 2.3-2.1-.85q-.7.4-1.6.65l-.6 2.2h-3.4l-.6-2.2q-.9-.25-1.6-.65l-2.1.85-2.3-2.3.85-2.1q-.4-.7-.65-1.6l-2.2-.6v-3.4l2.2-.6q.25-.9.65-1.6l-.85-2.1 2.3-2.3 2.1.85q.7-.4 1.6-.65z"/><circle cx="12" cy="12" r="3"/></svg></button></div></header><div id="oi-notice" class="status-notice" hidden><output id="oi-feedback" role="status" aria-live="polite" hidden></output><button type="button" id="oi-dismiss-status" aria-label="Dismiss status">×</button></div><button type="button" id="oi-undo-import" hidden>Undo import</button>
 <section class="card search-card"><div class="search-row"><input class="search-input" type="text" placeholder="Search words or phrases…" aria-label="Search words or phrases"><button class="and" type="button">and</button><button class="or" type="button">or</button></div><div class="term-space"></div></section>
@@ -1671,7 +1678,22 @@ render();
    const expanded=expandedSnippets.has(bookmark.id);excerpt.classList.toggle('expanded-snippet',expanded);
    const toggle=button(expanded?'Show less':'Show more',()=>{const next=!expandedSnippets.has(bookmark.id);if(next)expandedSnippets.add(bookmark.id);else expandedSnippets.delete(bookmark.id);excerpt.classList.toggle('expanded-snippet',next);toggle.textContent=next?'Show less':'Show more';toggle.setAttribute('aria-expanded',String(next))});toggle.className='snippet-toggle';toggle.setAttribute('aria-expanded',String(expanded));toggle.hidden=true;card.append(toggle);
    requestAnimationFrame(()=>{if(card.isConnected){const textHeight=excerpt.scrollHeight,lineHeight=parseFloat(getComputedStyle(excerpt).lineHeight);toggle.hidden=textHeight<=lineHeight*3+2;}});
-   if(bookmark.description){const description=button(bookmark.description,()=>{if(expandedDescriptions.has(bookmark.id))expandedDescriptions.delete(bookmark.id);else expandedDescriptions.add(bookmark.id);description.setAttribute('aria-expanded',String(expandedDescriptions.has(bookmark.id)))});description.className='bookmark-description';description.setAttribute('aria-label','Description: '+bookmark.description);description.setAttribute('aria-expanded',String(expandedDescriptions.has(bookmark.id)));card.append(description)}
+   if(bookmark.description){
+    const aiReason=bookmark.aiReview?.schema==='chatgpt-search-ai-review-v1';
+    const description=button(bookmark.description,()=>{
+     if(expandedDescriptions.has(bookmark.id))expandedDescriptions.delete(bookmark.id);
+     else expandedDescriptions.add(bookmark.id);
+     description.setAttribute('aria-expanded',String(expandedDescriptions.has(bookmark.id)));
+    });
+    description.className=aiReason?'oi-ai-reason-text':'bookmark-description';
+    description.setAttribute('aria-label',(aiReason?'AI reason: ':'Description: ')+bookmark.description);
+    description.setAttribute('aria-expanded',String(expandedDescriptions.has(bookmark.id)));
+    if(aiReason){
+     const explanation=el('section','oi-ai-reason');
+     explanation.append(el('span','oi-ai-reason-label','Why AI selected this'),description);
+     card.append(explanation);
+    }else card.append(description);
+   }
    const status=window.oiBookmarkText.inspect(message?.text,bookmark.snippet);
    if(status!=='valid')card.append(el('p','internal-meta',status==='missing'?'Original message unavailable in this archive. Saved details are retained.':'Source passage has changed. Saved excerpt retained; choose Change snippet to review.'));
    if(bookmark.folderId){const bottom=el('div','bookmark-card-footer'),location=byFolder(bookmark.folderId)?folderPath(bookmark.folderId).map(f=>f.name).join(' › '):'Unavailable folder';bottom.append(el('span','internal-meta',location));card.append(bottom)}
@@ -1800,7 +1822,12 @@ render();
    toggle.className='snippet-toggle';toggle.setAttribute('aria-expanded',String(expanded));toggle.hidden=true;card.append(toggle);
    requestAnimationFrame(()=>{if(card.isConnected){const h=excerpt.scrollHeight,l=parseFloat(getComputedStyle(excerpt).lineHeight);toggle.hidden=h<=l*3+2}});
   }
-  if(saved?.note)card.append(el('p','oi-list-note',saved.note));
+  if(saved?.note){
+   const explanation=el('section','oi-ai-reason');
+   explanation.append(el('span','oi-ai-reason-label','Why AI selected this'));
+   explanation.append(el('p','',saved.note));
+   card.append(explanation);
+  }
   const controls=el('div','oi-list-actions');
   const context=button('Open context',()=>window.oiOpenReader(cid,message?.id||null));
   context.disabled=!entry;
@@ -1821,7 +1848,7 @@ render();
     ['Offline archive','Use Import for ChatGPT exports, Saved HTML and AI Review JSON. Import a ChatGPT export ZIP (including nested ZIPs) or conversation JSON. Conversation files are merged by ID. Older versions are retained where newer information already exists. Each JSON is saved in small local batches, and interrupted imports can be resumed by selecting the same ZIP. Bookmarks, lists and folders are retained. Keep your source export as an independent backup.'],
     ['Search','Typing is a draft. Enter or and commits to the current AND group; Shift+Enter or or starts an alternative group. Tab navigates normally. View commits any remaining draft as AND. Case and exact-word options affect both search and highlighting. Dates and inclusive calendar-day filters use Australia/Adelaide with daylight saving; missing timestamps cannot satisfy a date bound.'],
     ['Project metadata','Supported explicit fields: '+app.projectDiagnostic().checked.join(', ')+'. Custom GPT IDs and workspace IDs are not projects. Default Project N labels remain stable across imports and saved HTML.'],
-    ['Lists','Lists hold entire conversations and can also save a verified, conversation-specific message passage. Each list may show a different passage for the same conversation. Change snippet lets you tap any word to choose the exact starting point. Include/Exclude Any/All rules remain available.'],
+    ['Lists','Lists hold entire conversations and can also save a verified, conversation-specific message passage plus a separately labelled AI reason explaining why it was selected. Each list may show a different passage for the same conversation. Change snippet lets you tap any word to choose the exact starting point. Include/Exclude Any/All rules remain available.'],
     ['Bookmarks and history','Each bookmark refers to one original message, with optional title/note, favourite star and one folder. All includes unfiled bookmarks; Folders shows actual folders and their direct contents. Search follows the selected tab and folder path. Change snippet lets you tap any starting word and adjust length. Save commits, Cancel leaves it unchanged. Missing/changed sources retain saved details. Bookmark removal offers session Undo. Folder deletion remains deferred. History retains every execution timestamp.'],
     ['Save and export','Save creates a NEW complete standalone HTML with source and research state. Export uses all eligible conversations across pages. Human timestamps use the same local calendar as the UI; JSON and AI provenance retain raw source timestamps. Both work offline. Reopen saved files to verify; actual iPhone behavior requires device testing.']]){const card=el('section','internal-card');card.append(el('h2','',title),el('p','',text));library.append(card)}
   }else if(libraryMode==='list'){
@@ -2272,4 +2299,4 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
  window.oiImportSavedHtml=importSavedHtml;
 })();
 
-</script><script data-ai-review-import src="./ai-review-import.js?v=3"></script><script data-ai-review-package src="./ai-review-package.js?v=1"></script></body></html>
+</script><script data-ai-review-import src="./ai-review-import.js?v=4"></script><script data-ai-review-package src="./ai-review-package.js?v=1"></script></body></html>
