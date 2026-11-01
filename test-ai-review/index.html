@@ -3085,6 +3085,64 @@ function bookmarksSection(root,bookmarks){
  root.append(host);
  if(bookmarks.length>limit)root.append(button('Show more bookmarks ('+nice(bookmarks.length-limit)+' remaining)',()=>{limit+=80;render(true)},'oi-org-loadmore'));
 }
+function exportQueueItemMenu(key){
+ const q=window.oiExportQueue;
+ window.oiDialog(q.name(key),(body,close)=>{
+  body.classList.add('action-menu');
+  body.append(button('Remove from Export Queue',()=>{close();q.remove([key]);render(true)}),button('Cancel',close));
+ });
+}
+function exportQueueDialog(){
+ const q=window.oiExportQueue;if(!q?.items().length)return;
+ window.oiDialog('Export Queue for AI',(body,close)=>{
+  const form=el('form','oi-export-form');
+  form.append(el('p','internal-meta','Creates a ZIP with original messages, exact IDs, saved passages, list memberships, folder structure and AI review instructions. Your original library stays unchanged.'));
+  const title=el('label','','Evidence included');title.htmlFor='oi-export-scope';
+  const scope=el('select');scope.id='oi-export-scope';
+  scope.append(new Option('Focused — list conversations and bookmarked passages with context','focused'),
+               new Option('Full — complete conversations for everything','full'));
+  form.append(title,scope);
+  const mdLabel=el('label'),md=el('input');md.type='checkbox';
+  mdLabel.append(md,document.createTextNode(' Include Markdown reading copy'));form.append(mdLabel);
+  const taskTitle=el('label','','AI review / refinement instructions (optional)');
+  taskTitle.htmlFor='oi-export-instructions';
+  const note=el('textarea');note.id='oi-export-instructions';note.value=s().exportQueueInstructions||'';
+  note.placeholder='e.g. Consolidate related findings chronologically while preserving all original IDs, distinct details and earlier reasoning.';
+  form.append(taskTitle,note);
+  form.append(el('p','internal-meta','The queue clears after a successful Share or when a download is initiated. Cancelling the Share sheet preserves it. Safari cannot confirm a browser download was saved.'));
+  const controls=el('div','oi-export-controls');controls.append(button('Cancel',close));
+  const run=button('Create AI review ZIP',()=>{});run.type='submit';controls.append(run);form.append(controls);
+  form.onsubmit=e=>{
+   e.preventDefault();if(run.disabled)return;run.disabled=true;
+   const config={scope:scope.value,context:3,markdown:md.checked,instructions:note.value};
+   s().exportQueueInstructions=note.value;app.changed();close();
+   app.report('Preparing Export Queue AI package…',{kind:'progress'});
+   Promise.resolve().then(()=>q.buildPackage(config)).then(file=>window.oiDownloadFile(file)).then(result=>{
+    if(result&&!result.cancelled){q.clear();app.report('AI review ZIP created. Queue cleared; original items unchanged.',{kind:'success'});}
+    else app.report('Export cancelled. Queue retained.',{kind:'success'});
+   }).catch(error=>window.oiAlert('Export Queue failed',error?.message||String(error)));
+  };
+  body.append(form);
+ });
+}
+function queuePanel(root){
+ const q=window.oiExportQueue,keys=q?.items()||[];
+ root.append(el('p','oi-export-count',keys.length+' manually added item(s). Selected folders include their contents. Original items remain where they are.'));
+ const controls=el('div','oi-export-controls');
+ controls.append(button('Export for AI',exportQueueDialog));
+ controls.append(button('Clear queue',()=>window.oiConfirm('Clear Export Queue?','Only queue references will be removed; your library will remain unchanged.','Clear queue',()=>{q.clear();selected.clear();render(true)})));
+ root.append(controls);
+ for(const key of keys){
+  const n=key.indexOf(':'),kind=key.slice(0,n),id=key.slice(n+1),record=api.selectedItems([key])[0];
+  if(!record)continue;
+  shown.add(key);
+  const parentId=kind==='folder'?record.obj.parentId:record.obj.folderId,parent=parentId?api.folder(parentId):null;
+  const description=(parent?'Inside '+parent.name+' · ':'')+(kind==='folder'?'Folder':kind==='list'?'Conversation list':'Bookmark');
+  const open=()=>{if(kind==='folder')orgFolder(id);else if(kind==='list')window.oiOpenLibrary('list',id);else window.oiOpenReader(record.obj.conversationId,record.obj.messageId)};
+  entryRow(root,kind,q.name(key),description,open,{type:kind,id,more:()=>exportQueueItemMenu(key)});
+ }
+ if(!keys.length)root.append(el('p','oi-org-empty','No queued items. Browse Organisation, select items and choose Add to Export Queue.'));
+}
 function searchFilter(item){
  if(!query.trim())return true;
  const text=typeof item==='object'?[item.name,item.title,item.description,item.sourceTitle,item.snippet?.text,item.aiReview?.reviewLabel].filter(Boolean).join(' '):String(item);
