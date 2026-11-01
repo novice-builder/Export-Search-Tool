@@ -367,6 +367,7 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 /* Export queue indicators distinguish queue membership from selection. */
 #view-organisation .oi-export-marker,.bookmark-card .oi-export-marker{display:inline-flex;align-items:center;flex-shrink:0;color:#b85b18;font-size:11px;font-weight:700;white-space:nowrap;padding:2px 5px;border:1px solid #ce8b51;border-radius:6px;background:transparent}
 #view-organisation .oi-export-included{color:var(--muted);border-color:var(--line)}
+:is(#view-organisation,#view-library) .oi-export-excluded{color:var(--muted);border-color:var(--line-dark);font-weight:600}
 #view-organisation .oi-export-count{font-size:12px;color:var(--muted);margin:8px 0 12px}
 #view-organisation .oi-export-controls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0 14px}
 #view-organisation .oi-export-controls button{min-height:40px;padding:7px 12px}
@@ -1829,7 +1830,12 @@ render();
   window.oiDialog('Bookmark actions',(body,close)=>{
    body.classList.add('action-menu');
    if(duplicateIndex().info(bookmark))body.append(button('Compare bookmark copies',()=>{close();compareBookmarkCopies(bookmark)}));
-   if(window.oiExportQueue)body.append(button((window.oiExportQueue.has('bookmark',bookmark.id)?'Remove from':'Add to')+' Export Queue',()=>{close();window.oiExportQueue.has('bookmark',bookmark.id)?window.oiExportQueue.remove(['bookmark:'+bookmark.id]):window.oiExportQueue.add(['bookmark:'+bookmark.id]);}));
+   if(window.oiExportQueue){
+    const q=window.oiExportQueue,st=q.status('bookmark',bookmark.id),k='bookmark:'+bookmark.id;
+    body.append(button(st==='excluded'?'Include in Export Queue':st?'Remove from Export Queue':'Add to Export Queue',()=>{
+     close();if(st==='excluded'||!st)q.add([k]);else q.exclude([k]);
+    }));
+   }
     body.append(button('Edit details',()=>{close();editDetails(bookmark)}),button('Change snippet',()=>{close();openSnippet(bookmark)}),button('Move to folder',()=>{close();movePicker({bookmark})}),button('Remove bookmark',()=>{close();services.removeBookmark(bookmark.id)}),button('Cancel',close));
   });
  }
@@ -1897,7 +1903,12 @@ render();
    const open=()=>{if(message)window.oiOpenReader(bookmark.conversationId,bookmark.messageId)};
    excerpt.onclick=open;excerpt.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open()}};
    const folder=button('',()=>movePicker({bookmark}));folder.className='ui-icon bookmark-folder';folder.setAttribute('aria-label',bookmark.folderId?'Change bookmark folder':'Assign bookmark folder');folder.setAttribute('aria-pressed',String(Boolean(bookmark.folderId)));folder.title=bookmark.folderId?'Change folder':'Assign folder';folder.append(window.oiGlyph('folder'));
-   heading.append(star,folder,more);const exportState=window.oiExportQueue?.status('bookmark',bookmark.id);if(exportState){const marker=el('span','oi-export-marker'+(exportState==='included'?' oi-export-included':''),exportState==='direct'?'✓ Export':'↳ Export');marker.title=exportState==='direct'?'Added directly to Export Queue':'Included through a queued folder';heading.append(marker)}card.append(heading);
+   heading.append(star,folder,more);const exportState=window.oiExportQueue?.status('bookmark',bookmark.id);if(exportState){
+    const labels={direct:'✓ Export',included:'↳ Export',excluded:'× Excluded'};
+    const marker=el('span','oi-export-marker'+(exportState==='included'?' oi-export-included':exportState==='excluded'?' oi-export-excluded':''),labels[exportState]);
+    marker.title=exportState==='direct'?'Added directly to Export Queue':exportState==='included'?'Included through a queued folder':'Excluded from a queued folder';
+    heading.append(marker);
+   }card.append(heading);
    const dupe=duplicates.info(bookmark);
    if(dupe){
     const marker=el('span','oi-bookmark-duplicate',dupe.exact>1?'Duplicate · '+dupe.count+' copies':'Same message · '+dupe.count+' bookmarks');
@@ -2579,7 +2590,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
  window.oiImportSavedHtml=importSavedHtml;
 })();
 
-</script><script data-ai-review-import src="./ai-review-import.js?v=7"></script><script data-ai-review-package src="./ai-review-package.js?v=2"></script><script data-export-queue src="./export-queue.js?v=1"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
+</script><script data-ai-review-import src="./ai-review-import.js?v=7"></script><script data-ai-review-package src="./ai-review-package.js?v=2"></script><script data-export-queue src="./export-queue.js?v=2"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
 (()=>{
 'use strict';
 const app=window.oiArchive;
@@ -2814,7 +2825,14 @@ function entryRow(parent,icon,label,secondary,onOpen,{type,id,more,badge}={}){
  text.append(el('strong','',label));
  if(secondary)text.append(el('small','',secondary));
  main.append(glyph,text);
- if(badge)main.append(el('span','oi-org-badge',badge));if(type&&id){const status=window.oiExportQueue?.status(type,id);if(status){const marker=el('span','oi-export-marker'+(status==='included'?' oi-export-included':''),status==='direct'?'✓ Export':'↳ Export');marker.title=status==='direct'?'Added directly to Export Queue':'Included through a queued folder';main.append(marker)}}
+ if(badge)main.append(el('span','oi-org-badge',badge));if(type&&id){
+  const st=window.oiExportQueue?.status(type,id);
+  if(st){
+   const labels={direct:'✓ Export',included:'↳ Export',excluded:'× Excluded'};
+   const marker=el('span','oi-export-marker'+(st==='included'?' oi-export-included':st==='excluded'?' oi-export-excluded':''),labels[st]);
+   marker.title=st==='direct'?'Added directly to Export Queue':st==='included'?'Included through a queued folder':'Excluded from a queued folder';main.append(marker);
+  }
+ }
  const arrow=el('span','oi-org-chevron','›');main.append(arrow);
  row.append(main);
  if(more){const opts=button('⋯',more,'oi-org-more');opts.setAttribute('aria-label','Options for '+label);row.append(opts)}
@@ -2938,7 +2956,12 @@ function folderActions(record){
  const folder=record;
  window.oiDialog(folder.name,(body,close)=>{
   body.classList.add('action-menu');
-  body.append(button('Open folder',()=>{close();orgFolder(folder.id)}));if(window.oiExportQueue)body.append(button((window.oiExportQueue.has('folder',folder.id)?'Remove from':'Add to')+' Export Queue',()=>{close();window.oiExportQueue.has('folder',folder.id)?window.oiExportQueue.remove(['folder:'+folder.id]):window.oiExportQueue.add(['folder:'+folder.id]);render(true)}));
+  body.append(button('Open folder',()=>{close();orgFolder(folder.id)}));if(window.oiExportQueue){
+   const q=window.oiExportQueue,st=q.status('folder',folder.id),k='folder:'+folder.id;
+   body.append(button(st==='excluded'?'Include in Export Queue':st?'Remove from Export Queue':'Add to Export Queue',()=>{
+    close();if(st==='excluded'||!st)q.add([k]);else q.exclude([k]);render(true);
+   }));
+  }
   body.append(button('Rename',()=>{close();changeName({type:'folder',id:folder.id,obj:folder})}));
   body.append(button('Move to folder',()=>{close();destination('Move folder',(target)=>{api.move(['folder:'+folder.id],target);render(true)})}));
   body.append(button('Merge into another folder',()=>{close();destination('Merge folder into',(target)=>{
@@ -2953,7 +2976,12 @@ function listActions(record){
  const list=record;
  window.oiDialog(list.name,(body,close)=>{
   body.classList.add('action-menu');
-  body.append(button('Open conversation list',()=>{close();window.oiOpenLibrary('list',list.id)}));if(window.oiExportQueue)body.append(button((window.oiExportQueue.has('list',list.id)?'Remove from':'Add to')+' Export Queue',()=>{close();window.oiExportQueue.has('list',list.id)?window.oiExportQueue.remove(['list:'+list.id]):window.oiExportQueue.add(['list:'+list.id]);render(true)}));
+  body.append(button('Open conversation list',()=>{close();window.oiOpenLibrary('list',list.id)}));if(window.oiExportQueue){
+   const q=window.oiExportQueue,st=q.status('list',list.id),k='list:'+list.id;
+   body.append(button(st==='excluded'?'Include in Export Queue':st?'Remove from Export Queue':'Add to Export Queue',()=>{
+    close();if(st==='excluded'||!st)q.add([k]);else q.exclude([k]);render(true);
+   }));
+  }
   body.append(button('Rename',()=>{close();changeName({type:'list',id:list.id,obj:list})}));
   body.append(button(list.favourite?'Remove favourite':'Add favourite',()=>{close();api.favourite(['list:'+list.id],!list.favourite);render(true)}));
   body.append(button('Move to folder',()=>{close();destination('Move list',dest=>{api.move(['list:'+list.id],dest);render(true)})}));
@@ -3132,7 +3160,7 @@ function exportQueueDialog(){
 }
 function queuePanel(root){
  const q=window.oiExportQueue,keys=q?.items()||[];
- root.append(el('p','oi-export-count',keys.length+' manually added item(s). Selected folders include their contents. Original items remain where they are.'));
+ root.append(el('p','oi-export-count',keys.length+' manually added item(s) · '+q.excludedItems().length+' excluded. Queued folders include their contents except explicitly excluded items. Original items remain unchanged.'));
  const controls=el('div','oi-export-controls');
  controls.append(button('Export for AI',exportQueueDialog));
  controls.append(button('Clear queue',()=>window.oiConfirm('Clear Export Queue?','Only queue references will be removed; your library will remain unchanged.','Clear queue',()=>{q.clear();selected.clear();render(true)})));
