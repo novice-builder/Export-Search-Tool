@@ -62,7 +62,7 @@
   urlRow.append(urlText,copy);
   guide.append(urlRow);
   guide.append(node('p','oi-home-icon-hint',
-   'A Shortcuts icon opens the website via the shortcut. It does not replace the icon of an already installed standalone web app. You can rename a Safari web app when adding it to the Home Screen.'));
+   'Shortcuts normally opens the site in your browser. On iPhone, the standalone web app can have different saved data from Safari. Keep using your installed web app for data stored there. This shortcut does not replace its icon. You can rename a Safari web app when adding it to the Home Screen.'));
   const close=node('button','','Close');close.type='button';
   close.onclick=()=>panel.closest('dialog')?.close();
   form.append(caption,info,previewRow,actions,status,guide,close);
