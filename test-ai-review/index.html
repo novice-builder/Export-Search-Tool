@@ -2868,7 +2868,7 @@ function pathTools(root){
  };
  if(virtual!==null){
   addCrumb('All folders',()=>orgFolder(null),false);
-  addCrumb(({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites'}[virtual]||'Organisation'),null,true);
+  addCrumb(({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites','export-queue':'Export Queue'}[virtual]||'Organisation'),null,true);
  }else{
   if(at===null)addCrumb('All folders',null,true);
   else{
@@ -3101,7 +3101,7 @@ function render(keepScroll=false){
  const previous=at!==null?'parent folder':virtual!==null?'all folders':'previous screen';
  const backButton=button('← Back',back,'oi-org-back');backButton.setAttribute('aria-label','Back to '+previous);
  top.append(backButton);
- top.append(el('h1','',virtual?({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites'}[virtual]||'Organisation'):at!==null?(api.folder(at)?.name||'All folders'):'Organisation'));
+ top.append(el('h1','',virtual?({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites','export-queue':'Export Queue'}[virtual]||'Organisation'):at!==null?(api.folder(at)?.name||'All folders'):'Organisation'));
  const exitButton=button('×',()=>{if(window.oiBack)window.oiBack();else window.oiShowMainView()},'oi-org-exit');
  exitButton.setAttribute('aria-label','Close Organisation and return to previous screen');exitButton.title='Close Organisation';
  top.append(exitButton);
@@ -3110,8 +3110,9 @@ function render(keepScroll=false){
  const search=el('input');search.type='search';search.placeholder='Search organisation…';search.value=query;search.setAttribute('aria-label','Search within Organisation');
  search.oninput=()=>{const pos=search.selectionStart;query=search.value;render(true);requestAnimationFrame(()=>{const next=view.querySelector('input[type=search]');next?.focus();next?.setSelectionRange(pos,pos)})};
  tools.append(search);view.append(tools);
- if(virtual===null&&at===null)quickAccess(view);
+ if(virtual===null&&at===null){quickAccess(view);if(window.oiExportQueue?.items().length){const queueRow=entryRow(view,'▣','Export Queue',window.oiExportQueue.items().length+' item(s) ready',()=>orgVirtual('export-queue'));queueRow.classList.add('oi-export-queue-root')}}
  pathTools(view);
+ if(virtual==='export-queue'){queuePanel(view);selectionBar(view);const foot=el('p','oi-org-feedback');foot.setAttribute('role','status');view.append(foot);if(keepScroll)requestAnimationFrame(()=>window.scrollTo(0,scroll));return;}
  const duplicateIndex=window.oiBookmarkDuplicateIndex?.();
  const folderItems=virtual===null?s().folders.filter(f=>f.parentId===at&&searchFilter(f)).sort((a,b)=>a.name.localeCompare(b.name)):[];
  const listItems=s().lists.filter(l=>
