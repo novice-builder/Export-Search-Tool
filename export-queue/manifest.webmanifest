@@ -1,6 +1,6 @@
 {
-  "name": "ChatGPT Search Tool — Export Queue Trial",
-  "short_name": "Search Export",
+  "name": "Search Tool",
+  "short_name": "Search Tool",
   "id": "./index.html",
   "start_url": "./index.html",
   "scope": "./",

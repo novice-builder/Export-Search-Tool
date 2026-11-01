@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>ChatGPT Search Tool — Export Queue Trial</title><meta name="theme-color" content="#233f68"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>Search Tool</title><meta name="theme-color" content="#233f68"><meta name="apple-mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Search Tool"><meta name="apple-mobile-web-app-status-bar-style" content="default"><link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png"><link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png">
 <style id="canonical-main-css">
 /* GLOBAL IDENTITY AND MAIN VIEW — canonical rules */
 :root{color-scheme:light;--bg:#f3f5f9;--card:#fff;--ink:#1c293b;--muted:#63728a;--line:#d9e1ec;--line-dark:#bfcbdc;--accent:#233f68;--soft:#edf2f8;--radius:10px;--gap:8px;--input-font-size:16px;--control-height:34px;--control-py:6px;--control-px:8px;--primary-height:40px}
@@ -253,6 +253,22 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #oi-action-dialog .oi-settings-storage-row{display:flex;align-items:center;flex-wrap:wrap;gap:3px 9px;color:var(--muted);font-size:12px;line-height:1.4}
 #oi-action-dialog .oi-settings-learn-more{display:inline;min-height:28px;padding:1px 0;margin:0;border:0;border-radius:0;background:transparent;color:var(--accent);font-size:12px;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
 #oi-action-dialog .oi-settings-learn-more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#oi-action-dialog .oi-home-icon-panel{display:grid;gap:12px}
+#oi-action-dialog .oi-home-icon-panel p{margin:0;white-space:normal}
+#oi-action-dialog .oi-home-icon-hint{color:var(--muted);font-size:12px;line-height:1.45}
+#oi-action-dialog .oi-home-icon-preview-row{display:flex;align-items:center;gap:15px}
+#oi-action-dialog .oi-home-icon-preview{width:82px;height:82px;object-fit:cover;border:1px solid var(--line);border-radius:19px;flex-shrink:0}
+#oi-action-dialog .oi-home-icon-preview-info{min-width:0}
+#oi-action-dialog .oi-home-icon-preview-info strong{display:block;font-size:14px;margin-bottom:5px}
+#oi-action-dialog .oi-home-icon-controls{display:flex;flex-wrap:wrap;gap:7px}
+#oi-action-dialog .oi-home-icon-controls button{font-size:12px;white-space:normal;flex:1;min-width:100px}
+#oi-action-dialog .oi-home-icon-controls input[type=file][hidden]{display:none!important}
+#oi-action-dialog .oi-home-icon-status{font-size:12px;color:var(--muted);min-height:16px}
+#oi-action-dialog .oi-home-icon-guide{border-top:1px solid var(--line);padding-top:10px;display:grid;gap:8px}
+#oi-action-dialog .oi-home-icon-guide h3{font-size:13px;margin:0}
+#oi-action-dialog .oi-home-icon-url-row{display:flex;gap:7px;align-items:center;min-width:0;flex-wrap:wrap}
+#oi-action-dialog .oi-home-icon-url-row code{font-size:10px;overflow-wrap:anywhere;min-width:0;flex:1}
+#oi-action-dialog .oi-home-icon-url-row button{font-size:11px;flex-shrink:0}
 #oi-action-dialog .oi-file-name-settings label{font-size:13px;font-weight:600;margin:8px 0 3px}
 #oi-action-dialog .oi-file-name-row{display:flex;align-items:center;gap:8px}
 #oi-action-dialog .oi-file-name-row input{min-width:0;flex:1;margin:3px 0 6px}
@@ -1064,7 +1080,7 @@ async function runSaveStage(i){if(busy||i!==saveState.step+1)return false;busy=t
  if(i===1){stageReport('Stage 1/5: serializing complete conversation data…');await yieldUI();saveState.raw=JSON.stringify(createPortableData());stageReport('Stage 1/5 complete: '+saveState.raw.length.toLocaleString()+' JSON characters; '+data.entries.length+' conversations.');}
  if(i===2){if(typeof CompressionStream==='undefined')throw Error('CompressionStream gzip is unavailable in this HTML viewer');stageReport('Stage 2/5: compressing '+saveState.raw.length.toLocaleString()+' JSON characters…');await yieldUI();saveState.gz=await new Response(new Blob([saveState.raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();stageReport('Stage 2/5 complete: '+prettySize(saveState.gz.byteLength)+' gzip data.');saveState.raw=null;}
  if(i===3){stageReport('Stage 3/5: encoding '+prettySize(saveState.gz.byteLength)+' as Base64…');await yieldUI();saveState.b64=encodeBase64(new Uint8Array(saveState.gz));stageReport('Stage 3/5 complete: '+saveState.b64.length.toLocaleString()+' Base64 characters.');saveState.gz=null;}
- if(i===4){stageReport('Stage 4/5: assembling standalone HTML…');await yieldUI();const clone=document.documentElement.cloneNode(true);clone.querySelectorAll('#view-library,#view-reader,#view-snippet,#oi-action-dialog,#oi-bookmark-notice,#oi-include-choices,#oi-exclude-choices,#oi-priority-row').forEach(node=>node.remove());clone.querySelector('script[data-local-persistence]')?.remove();clone.querySelector('script[data-saved-html-import]')?.remove();clone.querySelector('script[data-settings-ui]')?.remove();clone.querySelector('script[data-ai-review-import]')?.remove();clone.querySelector('script[data-ai-review-package]')?.remove();clone.querySelector('link[rel=manifest]')?.remove();clone.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(node=>node.remove());clone.querySelector('.list-rows').replaceChildren();clone.querySelector('#oi-undo-import').hidden=true;clone.querySelector('#oi-notice').hidden=true;clone.querySelector('#oi-feedback').hidden=true;clone.querySelector('main.shell').hidden=false;clone.querySelector('main.shell').inert=false;clone.querySelector('#oi-results-host').hidden=true;clone.querySelector('#compressed-archive').textContent=saveState.b64;clone.querySelector('#portable-data').textContent='{"entries":[],"accent":"blue","imports":[]}';clone.querySelector('#status').textContent='Opening saved compressed archive…';const rep=clone.querySelector('#stage-report');if(rep)rep.textContent='Saved archive ready. Imported conversations will restore automatically.';const html='<!doctype html>\n'+clone.outerHTML;saveState.file=new File([html],window.oiFileNames.file('savedHtml','html'),{type:'text/html'});stageReport('Stage 4/5 complete: standalone HTML '+prettySize(saveState.file.size)+'.');saveState.b64=null;}
+ if(i===4){stageReport('Stage 4/5: assembling standalone HTML…');await yieldUI();const clone=document.documentElement.cloneNode(true);clone.querySelectorAll('#view-library,#view-reader,#view-snippet,#oi-action-dialog,#oi-bookmark-notice,#oi-include-choices,#oi-exclude-choices,#oi-priority-row').forEach(node=>node.remove());clone.querySelector('script[data-local-persistence]')?.remove();clone.querySelector('script[data-saved-html-import]')?.remove();clone.querySelector('script[data-settings-ui]')?.remove();clone.querySelector('script[data-home-screen-icon]')?.remove();clone.querySelector('script[data-ai-review-import]')?.remove();clone.querySelector('script[data-ai-review-package]')?.remove();clone.querySelector('link[rel=manifest]')?.remove();clone.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(node=>node.remove());clone.querySelector('.list-rows').replaceChildren();clone.querySelector('#oi-undo-import').hidden=true;clone.querySelector('#oi-notice').hidden=true;clone.querySelector('#oi-feedback').hidden=true;clone.querySelector('main.shell').hidden=false;clone.querySelector('main.shell').inert=false;clone.querySelector('#oi-results-host').hidden=true;clone.querySelector('#compressed-archive').textContent=saveState.b64;clone.querySelector('#portable-data').textContent='{"entries":[],"accent":"blue","imports":[]}';clone.querySelector('#status').textContent='Opening saved compressed archive…';const rep=clone.querySelector('#stage-report');if(rep)rep.textContent='Saved archive ready. Imported conversations will restore automatically.';const html='<!doctype html>\n'+clone.outerHTML;saveState.file=new File([html],window.oiFileNames.file('savedHtml','html'),{type:'text/html'});stageReport('Stage 4/5 complete: standalone HTML '+prettySize(saveState.file.size)+'.');saveState.b64=null;}
  if(i===5){stageReport('Stage 5/5: handing '+prettySize(saveState.file.size)+' HTML to Share/download…');await yieldUI();const result=await window.oiDownloadFile(saveState.file);if(result.cancelled){stageReport('Save cancelled. The archive remains loaded.','success');return false;}stageReport(result.method==='share'?'Share returned. Reopen the saved HTML to verify.':'Download handed to the browser. Reopen the saved HTML to verify.','success');}
 
  saveState.step=i;if(i<5)stageReport($('stage-report').textContent+'\nElapsed: '+((performance.now()-start)/1000).toFixed(2)+' s. Tap stage '+(i+1)+' when ready.');
@@ -2296,6 +2312,9 @@ window.oiBuildEvidenceExport=choice=>{
   };
   storageRow.append(storageBrief,document.createTextNode(' '),learnMore);
 
+  const homeIconButton=document.createElement('button');homeIconButton.type='button';
+  homeIconButton.textContent='Home Screen icon';
+  homeIconButton.onclick=()=>{close();window.oiHomeIcon?.open()};
   const filenameButton=document.createElement('button');filenameButton.type='button';filenameButton.textContent='Default filenames';
   filenameButton.onclick=()=>{
    close();
@@ -2373,10 +2392,10 @@ window.oiBuildEvidenceExport=choice=>{
    });
   };
   const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=close;
-  main.append(filenameButton,title,storageRow,projectButton,clear,done);body.append(main);
+  main.append(filenameButton,homeIconButton,title,storageRow,projectButton,clear,done);body.append(main);
  }));
 })();
-</script><script data-local-persistence>
+</script><script data-home-screen-icon src="./home-screen-icon.js?v=1"></script><script data-local-persistence>
 /* Search Tool incremental local persistence. Everything stays on this device. */
 (()=>{
 'use strict';
@@ -2484,6 +2503,7 @@ function combineResearch(existing,newData){
   out[key]=current;
  }
  for(const key of ['projectNames','projectLabels','projectSourceNames'])out[key]={...(incoming[key]||{}),...(out[key]||{})};
+ if(!out.homeScreenIconPng&&typeof incoming.homeScreenIconPng==='string'&&incoming.homeScreenIconPng.startsWith('data:image/png;base64,'))out.homeScreenIconPng=incoming.homeScreenIconPng;
  return out;
 }
 async function beginImport(signature,label){
