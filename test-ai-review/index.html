@@ -2214,8 +2214,6 @@ window.oiBuildEvidenceExport=choice=>{
   const title=document.createElement('h3');title.textContent='Data management';
   const status=document.createElement('p');status.textContent=window.oiPwaTest?.status||'Storage status not available';
   const tip=document.createElement('p');tip.textContent='Conversations and research are saved locally in this installation. Safari and Home Screen apps may have separate storage.';
-  const aiCopy=document.createElement('button');aiCopy.type='button';aiCopy.textContent='Copy AI review JSON instructions';
-  aiCopy.onclick=()=>{close();if(window.oiAIReviewImport)window.oiAIReviewImport.copyInstructions();else window.oiAlert('Unavailable','JSON instructions are not available yet.')};
   const projectButton=document.createElement('button');projectButton.type='button';projectButton.textContent='Project naming and labels';
   projectButton.onclick=()=>{
    close();
@@ -2255,7 +2253,7 @@ window.oiBuildEvidenceExport=choice=>{
    });
   };
   const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=close;
-  main.append(title,status,tip,projectButton,aiCopy,clear,done);body.append(main);
+  main.append(title,status,tip,projectButton,clear,done);body.append(main);
  }));
 })();
 </script><script data-local-persistence>
