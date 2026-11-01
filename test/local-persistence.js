@@ -90,9 +90,10 @@
     if(writingArchive){
      const payload=app.createPortableData();
      const encoded=await encode(payload);
-     await put(ARCHIVE_KEY,{...encoded,savedAt:Date.now()});
-    }
-    if(writingState || writingArchive){
+     const now=Date.now();
+     const latest={research:structuredClone(app.research),workspace:app.captureWorkspace(),savedAt:now};
+     await putBoth({...encoded,savedAt:now},latest);
+    }else if(writingState){
      const latest={research:structuredClone(app.research),workspace:app.captureWorkspace(),savedAt:Date.now()};
      await put(STATE_KEY,latest);
     }
@@ -139,6 +140,55 @@
    console.error('Local restore failed; no stored data overwritten:',error);
   }
  }
+ // Atomic migration: replace both archive and research records in ONE IndexedDB transaction.
+ async function putBoth(archive,state){
+  const database=await db();
+  return new Promise((resolve,reject)=>{
+   const tx=database.transaction('records','readwrite');
+   const store=tx.objectStore('records');
+   store.put(archive,ARCHIVE_KEY);
+   store.put(state,STATE_KEY);
+   tx.oncomplete=()=>resolve();
+   tx.onabort=()=>reject(tx.error||new Error('Restore save aborted'));
+   tx.onerror=()=>reject(tx.error||new Error('Restore save failed'));
+  });
+ }
+ let importing=false;
+ async function importPayload(payload,originalGzip=null){
+  if(!active || importing)throw Error('Device storage is not ready');
+  importing=true;
+  while(working)await new Promise(resolve=>setTimeout(resolve,60));
+  if(timer){clearTimeout(timer);timer=null;}
+  pendingArchive=false;pendingState=false;
+  active=false;
+  let changed=false;
+  try {
+   show('preparing saved HTML archive…');
+   const encoded=originalGzip?{encoding:'gzip',body:originalGzip}:await encode(payload);
+   changed=true;
+   app.loadLocal(payload);
+   const now=Date.now();
+   const state={research:structuredClone(app.research),workspace:app.captureWorkspace(),savedAt:now};
+   show('saving recovered data on this device…');
+   await putBoth({...encoded,savedAt:now},state);
+   lastError=null;
+   show('restored and saved '+app.entries.length.toLocaleString()+' conversations');
+  } catch(error) {
+   if(changed){
+    try{
+     const [oldArchive,oldState]=await Promise.all([get(ARCHIVE_KEY),get(STATE_KEY)]);
+     const oldPayload=await decode(oldArchive)||{schema:'oi-linked-messages-v2',entries:[],imports:[],accent:'blue',research:{}};
+     if(oldState){oldPayload.research=oldState.research||{};oldPayload.workspace=oldState.workspace||oldPayload.workspace;}
+     app.loadLocal(oldPayload);
+    }catch(revertError){console.error('Could not reload previous in-memory archive:',revertError);}
+   }
+   show('IMPORT FAILED — original device data retained ('+(error?.name||'error')+')',true);
+   throw error;
+  }finally{
+   active=true;
+   importing=false;
+  }
+ }
  if(app.ready)void restore();
  // Basic service worker: only caches the public application files, never imported content.
  if('serviceWorker' in navigator){
@@ -146,5 +196,5 @@
    navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(e=>console.warn('Offline cache unavailable:',e));
   },{once:true});
  }
- window.oiPwaTest={get status(){return status.textContent},flush:()=>flush(),get ready(){return active}};
+ window.oiPwaTest={get status(){return status.textContent},flush:()=>flush(),get ready(){return active},importPayload};
 })();
