@@ -311,7 +311,6 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #view-organisation .oi-org-bulk{position:sticky;bottom:4px;z-index:10;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;box-shadow:0 5px 22px rgba(0,0,0,.12)}
 #view-organisation .oi-org-bulk button{font-size:12px;min-height:36px;padding:6px 9px}
 #view-organisation .oi-org-danger{color:#9d2636;border-color:#b5737c}
-#view-organisation .oi-org-undo{margin-top:15px;padding:10px;border:1px solid var(--line);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px}
 #view-organisation .oi-org-empty,#oi-action-dialog .oi-org-empty{color:var(--muted);font-size:12px;padding:10px}
 #view-organisation .oi-org-loadmore{display:block;width:100%;margin:10px 0}
 #view-organisation .oi-org-feedback{font-size:12px;color:var(--muted)}
@@ -2839,6 +2838,11 @@ function optionsMenu(){
   body.append(button((duplicatesOnly?'✓ ':'')+'Show duplicates only ('+duplicateCount+')',()=>{
    close();duplicatesOnly=!duplicatesOnly;render(true);
   }));
+  if(api.canUndo){
+   body.append(button('Undo last change'+(api.undoLabel?' — '+api.undoLabel:''),()=>{
+    close();api.undo();selected.clear();render(true);
+   }));
+  }
   body.append(button('Cancel',close));
  });
 }
@@ -3108,12 +3112,6 @@ function render(keepScroll=false){
  bookmarksSection(view,bookmarkItems);
  if(!folderItems.length&&!listItems.length&&!bookmarkItems.length)noResults(view);
  selectionBar(view);
- if(api.canUndo){
-  const footer=el('div','oi-org-undo');
-  footer.append(el('span','',api.undoLabel||'Previous change'));
-  footer.append(button('Undo',()=>{api.undo();selected.clear();render(true)}));
-  view.append(footer);
- }
  const foot=el('p','oi-org-feedback');foot.setAttribute('role','status');view.append(foot);
  if(keepScroll)requestAnimationFrame(()=>window.scrollTo(0,scroll));
 }
