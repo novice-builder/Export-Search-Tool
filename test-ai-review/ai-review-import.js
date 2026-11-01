@@ -23,7 +23,7 @@ function reviewInstructions(){
  'Return ONE downloadable JSON with schema "'+SCHEMA+'" and arrays "lists" and "bookmarks" (empty arrays allowed), and optional "reviewLabel".',
  'Each list needs a short "label" and "conversationIds" array containing only EXACT source IDs. For each useful conversation, include an entry under "snippets": [{"conversationId":"EXACT_ID","messageId":"EXACT_ID","quote":"EXACT VERBATIM PASSAGE","reason":"Why this conversation is relevant to this particular list"}]. Include only relevant list-specific snippets.',
  'The quote MUST copy a meaningful passage from the MIDDLE of the actual message when that is where the useful evidence begins. NEVER default to the first words merely because they start the message. Choose enough exact original text to convey the point; do not paraphrase or add leading ellipses. A message can supply different snippets for different lists.',
- 'Each bookmark needs exact "conversationId" and "messageId", a concise "title", and a "group" (use / for nested folders), plus "quote" of the original passage and "reason" for selecting it. Bookmarks should identify specific useful messages, not simply duplicate every list membership.',
+ 'Each bookmark needs exact "conversationId" and "messageId", a concise "title", plus "quote" and "reason". The optional "group" (slash-separated categories) is kept as a suggestion for later organisation and does not create category folders by default. Bookmarks should identify useful source messages, not duplicate every list membership.',
  'Write a short, specific "reason" for each selected list conversation and bookmark, ideally one sentence of about 12–35 words. Explain WHY this material matters to the requested review objective, not merely what the conversation title says. Ground reasons in the provided passage and distinguish AI interpretation from source evidence. Avoid generic praise and unsupported assumptions.',
  'Do NOT invent or alter IDs, guess quotations or turn conversation titles into IDs. If a quote cannot be verified verbatim, omit that snippet rather than inventing one.',
  'The importer will validate IDs and verbatim quotes against original messages and preserve manually edited snippets. Reply only with the JSON file, not prose outside the file.',
@@ -53,6 +53,84 @@ function parse(doc){
  if(bookmarks.length>20000)throw Error('Maximum 20,000 bookmarks per import');
  if(!lists.length&&!bookmarks.length)throw Error('No list or bookmark recommendations found');
  return {lists,bookmarks,reviewLabel:clean(doc.reviewLabel||doc.label||'',95)};
+}
+
+function destinationFolders(){
+ const folders=app.research.folders,byId=new Map(folders.map(f=>[f.id,f]));
+ function path(f){const names=[],seen=new Set();while(f&&!seen.has(f.id)){seen.add(f.id);names.unshift(f.name);f=byId.get(f.parentId)}return names.join(' › ')}
+ return folders.map(f=>({id:f.id,label:path(f)})).sort((a,b)=>a.label.localeCompare(b.label));
+}
+function chooseDestination(doc){
+ return new Promise(resolve=>{
+  let settled=false;
+  const finish=value=>{if(!settled){settled=true;resolve(value)}};
+  const dialog=window.oiDialog('Import AI Review',(body,close,modal)=>{
+   body.classList.add('oi-review-import');
+   const form=document.createElement('form'),input=document.createElement('input');
+   const nameLabel=document.createElement('label');
+   nameLabel.htmlFor='oi-review-folder-name';nameLabel.textContent='Review / folder name (optional)';
+   input.id='oi-review-folder-name';input.type='text';input.maxLength=95;input.value=doc.reviewLabel||'';input.placeholder='AI Review';
+   form.append(nameLabel,input);
+   const title=document.createElement('p');title.className='oi-review-heading';title.textContent='Destination';form.append(title);
+   const choices=document.createElement('div');choices.className='oi-review-choices';
+   const fresh=document.createElement('input'),existing=document.createElement('input');
+   fresh.type=existing.type='radio';fresh.name=existing.name='review-target';fresh.value='new';existing.value='existing';fresh.checked=true;
+   const createLabel=document.createElement('label'),existingLabel=document.createElement('label');
+   createLabel.append(fresh,document.createTextNode('Create a new review folder'));
+   existingLabel.append(existing,document.createTextNode('Use an existing folder'));
+   choices.append(createLabel,existingLabel);form.append(choices);
+   const folderLabel=document.createElement('label');folderLabel.textContent='Existing destination folder';folderLabel.htmlFor='oi-review-existing';
+   const selector=document.createElement('select');selector.id='oi-review-existing';
+   selector.append(new Option('Choose a folder…',''));
+   for(const f of destinationFolders())selector.add(new Option(f.label,f.id));
+   form.append(folderLabel,selector);
+   const hint=document.createElement('p');hint.className='oi-review-hint';form.append(hint);
+   const count=document.createElement('p');count.className='oi-review-hint';
+   const sources=new Set(app.research.bookmarks.map(b=>JSON.stringify([String(b.conversationId),String(b.messageId)])));
+   const duplicates=doc.bookmarks.filter(b=>sources.has(JSON.stringify([getId(b?.conversationId||b?.conversation_id),getId(b?.messageId||b?.message_id)]))).length;
+   count.textContent=doc.lists.length+' lists and '+doc.bookmarks.length+' bookmarks suggested'+(duplicates?' · '+duplicates+' source messages already bookmarked':'');
+   form.append(count);
+   const summary=document.createElement('p');summary.className='oi-review-hint';
+   summary.textContent='Each destination contains separate Conversation lists and Bookmarks folders. Existing bookmarks remain unchanged; copies will be marked.';
+   form.append(summary);
+   const controls=document.createElement('div');controls.className='oi-review-controls';
+   const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=()=>{finish(null);close()};
+   const importButton=document.createElement('button');importButton.type='submit';importButton.textContent='Import review';
+   controls.append(cancel,importButton);form.append(controls);
+   const sync=()=>{folderLabel.hidden=!existing.checked;selector.disabled=!existing.checked;
+    nameLabel.textContent=existing.checked?'Review name (optional)':'Review / folder name (optional)';
+    hint.textContent=existing.checked?'Lists and bookmarks will be placed in their own subfolders within the selected folder.':'Creates a new folder inside AI Reviewed. If you leave the name blank, AI Review (or a numbered variation) is used.';};
+   fresh.onchange=existing.onchange=sync;sync();
+   selector.onchange=()=>selector.setCustomValidity('');
+   form.onsubmit=e=>{e.preventDefault();if(existing.checked&&!selector.value){selector.setCustomValidity('Select a folder');selector.reportValidity();return}
+    finish({mode:existing.checked?'existing':'new',folderId:existing.checked?selector.value:null,name:clean(input.value,95)});close();};
+   body.append(form);modal.addEventListener('close',()=>finish(null));
+  });
+  const original=dialog.oiClose;dialog.oiClose=()=>{finish(null);original()};
+ });
+}
+function reviewDestination(doc,choice,count){
+ const research=app.research,eq=(a,b)=>same(String(a),String(b));
+ const create=(label,parent,extra={})=>{
+  const record={id:key(),name:label,parentId:parent,...extra};research.folders.push(record);count.newFolders++;return record;
+ };
+ let review;
+ if(choice.mode==='existing'){
+  review=research.folders.find(f=>f.id===choice.folderId);
+  if(!review)throw Error('The chosen destination folder is no longer available');
+ }else{
+  let root=research.folders.find(f=>f.parentId===null&&eq(f.name,'AI Reviewed'));
+  if(!root)root=create('AI Reviewed',null,{aiOrganised:true});
+  const base=choice.name||'AI Review';let title=base,i=2;
+  while(research.folders.some(f=>f.parentId===root.id&&eq(f.name,title)))title=base+' '+i++;
+  review=create(title,root.id,{aiOrganised:true,aiReviewSource:doc.reviewLabel||title});
+ }
+ const ensure=label=>{
+  let target=research.folders.find(f=>f.parentId===review.id&&eq(f.name,label));
+  if(!target)target=create(label,review.id,{aiOrganised:true,aiReviewSection:label});
+  return target.id;
+ };
+ return {reviewId:review.id,reviewName:review.name,listsId:ensure('Conversation lists'),bookmarksId:ensure('Bookmarks')};
 }
 function apply(doc){
  const all=new Map(app.entries.map(e=>[String(e.id),e]));
