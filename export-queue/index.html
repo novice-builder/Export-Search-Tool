@@ -250,6 +250,9 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #oi-action-dialog .oi-settings-body p{margin:0;white-space:normal}
 #oi-action-dialog .oi-settings-body h3{margin:0;font-size:14px}
 #oi-action-dialog .oi-settings-body .oi-clear-data{color:#9d2636;border-color:#dca8ad;text-align:left;white-space:normal}
+#oi-action-dialog .oi-settings-storage-row{display:flex;align-items:center;flex-wrap:wrap;gap:3px 9px;color:var(--muted);font-size:12px;line-height:1.4}
+#oi-action-dialog .oi-settings-learn-more{display:inline;min-height:28px;padding:1px 0;margin:0;border:0;border-radius:0;background:transparent;color:var(--accent);font-size:12px;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+#oi-action-dialog .oi-settings-learn-more:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #oi-action-dialog .oi-file-name-settings label{font-size:13px;font-weight:600;margin:8px 0 3px}
 #oi-action-dialog .oi-file-name-row{display:flex;align-items:center;gap:8px}
 #oi-action-dialog .oi-file-name-row input{min-width:0;flex:1;margin:3px 0 6px}
@@ -2272,8 +2275,26 @@ window.oiBuildEvidenceExport=choice=>{
  btn.addEventListener('click',()=>window.oiDialog('Settings',(body,close)=>{
   const main=document.createElement('div');main.className='oi-settings-body';
   const title=document.createElement('h3');title.textContent='Data management';
-  const status=document.createElement('p');status.textContent=window.oiPwaTest?.status||'Storage status not available';
-  const tip=document.createElement('p');tip.textContent='Conversations and research are saved locally in this installation. Safari and Home Screen apps may have separate storage.';
+  const storageRow=document.createElement('p');storageRow.className='oi-settings-storage-row';
+  const storageBrief=document.createElement('span');storageBrief.textContent='Data stored on this device.';
+  const learnMore=document.createElement('button');learnMore.type='button';
+  learnMore.className='oi-settings-learn-more';learnMore.textContent='Learn more';
+  learnMore.setAttribute('aria-label','Learn more about local storage');
+  learnMore.onclick=()=>{
+   close();
+   window.oiDialog('Local storage',(panel,done)=>{
+    const info=window.oiPwaTest;
+    const state=document.createElement('p');
+    state.textContent=info?.status||'Storage status unavailable';
+    const details=document.createElement('p');
+    details.textContent='Conversations, bookmarks, folders, lists and settings are saved locally in this installation. Safari and an app added to the Home Screen can use separate storage.';
+    const caution=document.createElement('p');
+    caution.textContent='Browser storage can be cleared or removed by iOS. Use Save to create a separate HTML backup of your working archive.';
+    const ok=document.createElement('button');ok.type='button';ok.textContent='Close';ok.onclick=done;
+    panel.append(state,details,caution,ok);
+   });
+  };
+  storageRow.append(storageBrief,document.createTextNode(' '),learnMore);
 
   const filenameButton=document.createElement('button');filenameButton.type='button';filenameButton.textContent='Default filenames';
   filenameButton.onclick=()=>{
@@ -2352,7 +2373,7 @@ window.oiBuildEvidenceExport=choice=>{
    });
   };
   const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=close;
-  main.append(filenameButton,title,status,tip,projectButton,clear,done);body.append(main);
+  main.append(filenameButton,title,storageRow,projectButton,clear,done);body.append(main);
  }));
 })();
 </script><script data-local-persistence>
@@ -2371,7 +2392,17 @@ status.id='oi-device-storage-status';status.setAttribute('role','status');status
 status.style.cssText='font-size:11px;display:block;text-align:right;padding:0 3px 5px;color:var(--muted)';
 status.textContent='Local storage: opening…';
 document.getElementById('view-main')?.querySelector('header.header')?.insertAdjacentElement('afterend',status);
-const show=(message,error=false)=>{status.textContent='Local storage: '+message;status.style.color=error?'#a52a3c':'var(--muted)'};
+let storageNoticeTimer=0;
+let latestStorageStatus='Local storage: opening…';
+const show=(message,error=false,{persistent=false}={})=>{
+ clearTimeout(storageNoticeTimer);
+ latestStorageStatus='Local storage: '+message;
+ status.textContent=latestStorageStatus;
+ status.style.color=error?'#a52a3c':'var(--muted)';
+ status.hidden=false;
+ // Normal ready/finished notices disappear; progress and errors remain visible.
+ if(!error&&!persistent)storageNoticeTimer=setTimeout(()=>{status.hidden=true},4000);
+};
 function openDB(){
  if(!databasePromise)databasePromise=new Promise((resolve,reject)=>{
   if(!window.indexedDB){reject(Error('IndexedDB unavailable'));return}
@@ -2402,7 +2433,7 @@ async function putBatch(entries){const db=await openDB();return new Promise((res
 });}
 async function readConversations(){const db=await openDB();return new Promise((resolve,reject)=>{
  const entries=[],tx=db.transaction('conversations','readonly'),r=tx.objectStore('conversations').openCursor();
- r.onsuccess=()=>{const c=r.result;if(c){entries.push(c.value);if(entries.length%250===0)show('restoring '+entries.length.toLocaleString()+' conversations…');c.continue()}else resolve(entries)};
+ r.onsuccess=()=>{const c=r.result;if(c){entries.push(c.value);if(entries.length%250===0)show('restoring '+entries.length.toLocaleString()+' conversations…',false,{persistent:true});c.continue()}else resolve(entries)};
  r.onerror=()=>reject(r.error||Error('Cannot restore conversations'));tx.onerror=()=>reject(tx.error||Error('Conversation restoration failed'));
 });}
 async function removeAll(){const db=await openDB();return new Promise((resolve,reject)=>{
@@ -2416,11 +2447,11 @@ function captureMeta(){return {
 }}
 async function saveMetadata(){if(!ready||activeImport||restoring)return;
  if(savingMeta)return;
- savingMeta=true;try{const m=captureMeta();await putMeta(m);cachedMeta=m;show('research changes saved on this device')}
+ savingMeta=true;try{const m=captureMeta();await putMeta(m);cachedMeta=m;latestStorageStatus='Local storage: ready · '+app.entries.length.toLocaleString()+' conversations saved on this device'}
  catch(e){show('SAVE FAILED — '+(e?.name||'storage error'),true);console.error(e)}finally{savingMeta=false}
 }
 function scheduleMeta(){if(!ready||activeImport||restoring)return;
- clearTimeout(metaTimer);status.textContent='Local storage: waiting to save research changes…';
+ clearTimeout(metaTimer);
  metaTimer=setTimeout(saveMetadata,800);
 }
 window.addEventListener('oi-research-change',scheduleMeta);
@@ -2462,7 +2493,7 @@ async function beginImport(signature,label){
  const progress=cachedMeta.progress?.signature===signature?structuredClone(cachedMeta.progress):{signature,label,done:[],startedAt:Date.now()};
  const entriesMap=new Map(app.entries.map(e=>[e.id,e]));
  let added=0,updated=0,skipped=0,filesSaved=0;
- show('import active · normal autosave paused');
+ show('import active · normal autosave paused',false,{persistent:true});
  return {
   isDone(path){return progress.done.includes(path)},
   async putEntries(batch){
@@ -2483,7 +2514,7 @@ async function beginImport(signature,label){
    if(!progress.done.includes(path))progress.done.push(path);
    const meta={...captureMeta(),progress:{...progress,done:[...progress.done]},imports:[...app.imports]};
    await putMeta(meta);cachedMeta=meta;filesSaved++;
-   show('saved '+progress.done.length+' JSON files · '+entriesMap.size.toLocaleString()+' conversations');
+   show('saved '+progress.done.length+' JSON files · '+entriesMap.size.toLocaleString()+' conversations',false,{persistent:true});
   },
   async finish(){
    const merged=[...entriesMap.values()];
@@ -2540,7 +2571,7 @@ async function persistAIReview(){
  const saved=captureMeta();
  await putMeta(saved);
  cachedMeta=saved;
- show('AI review recommendations saved on this device');
+ latestStorageStatus='Local storage: ready · '+app.entries.length.toLocaleString()+' conversations saved on this device';
 }
 async function clearAllData(){
  if(!ready||activeImport||restoring)throw Error('Wait until local storage is ready and no import is running');
@@ -2560,7 +2591,7 @@ async function restore(){
   ready=true;
  }catch(e){ready=false;show('RESTORE FAILED — '+(e?.message||String(e)),true);console.error(e)}finally{restoring=false}
 }
-window.oiPwaTest={get ready(){return ready},get status(){return status.textContent},beginImport,importPayload,clearAllData,persistAIReview};
+window.oiPwaTest={get ready(){return ready},get status(){return latestStorageStatus},beginImport,importPayload,clearAllData,persistAIReview};
 if(app.ready)void restore();else window.addEventListener('oi-archive-change',()=>{if(app.ready&&restoring)void restore()},{once:true});
 if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(e=>console.warn('Offline cache unavailable:',e)),{once:true})}
 })();
