@@ -250,6 +250,19 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #oi-action-dialog .oi-settings-body p{margin:0;white-space:normal}
 #oi-action-dialog .oi-settings-body h3{margin:0;font-size:14px}
 #oi-action-dialog .oi-settings-body .oi-clear-data{color:#9d2636;border-color:#dca8ad;text-align:left;white-space:normal}
+
+/* Evidence-centred conversation lists. Uses the same card hierarchy as bookmarks. */
+#view-library .oi-list-card{margin-bottom:10px;padding:11px}
+#view-library .oi-list-card .bookmark-card-heading h2{font-size:15px;line-height:1.38}
+#view-library .oi-list-card .bookmark-excerpt{min-height:0;margin:10px 0 2px}
+#view-library .oi-list-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+#view-library .oi-list-actions button{font-size:12px;min-height:38px}
+#view-library .oi-list-note{margin:9px 0 0;padding:8px 0 0;border-top:1px solid var(--line);font-size:12px;color:var(--muted);white-space:pre-wrap}
+#view-library .oi-list-empty{margin:12px 2px;color:var(--muted);font-size:12px}
+#oi-action-dialog .oi-message-chooser{display:grid;gap:8px}
+#oi-action-dialog .oi-message-chooser input{width:100%;font-size:16px}
+#oi-action-dialog .oi-message-options{display:grid;gap:7px;max-height:50vh;overflow:auto}
+#oi-action-dialog .oi-message-options button{display:block;text-align:left;white-space:normal;min-height:42px;overflow-wrap:anywhere}
 </style></head><body><main class="shell" id="view-main">
 <header class="header"><h1>ChatGPT Search Tool</h1><div class="actions"><button type="button" id="oi-main-save">Save</button><button type="button" id="oi-main-import">Import</button><button type="button" id="oi-help" class="oi-header-icon" title="Help and guide" aria-label="Help and guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.6 2.6 0 1 1 5 1c0 1.9-2.5 2.1-2.5 3.7"/><path d="M12 17.2h.01"/></svg></button><button type="button" id="oi-settings" class="oi-header-icon" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.3 2.7h3.4l.6 2.2q.9.25 1.6.65l2.1-.85 2.3 2.3-.85 2.1q.4.7.65 1.6l2.2.6v3.4l-2.2.6q-.25.9-.65 1.6l.85 2.1-2.3 2.3-2.1-.85q-.7.4-1.6.65l-.6 2.2h-3.4l-.6-2.2q-.9-.25-1.6-.65l-2.1.85-2.3-2.3.85-2.1q-.4-.7-.65-1.6l-2.2-.6v-3.4l2.2-.6q.25-.9.65-1.6l-.85-2.1 2.3-2.3 2.1.85q.7-.4 1.6-.65z"/><circle cx="12" cy="12" r="3"/></svg></button></div></header><div id="oi-notice" class="status-notice" hidden><output id="oi-feedback" role="status" aria-live="polite" hidden></output><button type="button" id="oi-dismiss-status" aria-label="Dismiss status">×</button></div><button type="button" id="oi-undo-import" hidden>Undo import</button>
 <section class="card search-card"><div class="search-row"><input class="search-input" type="text" placeholder="Search words or phrases…" aria-label="Search words or phrases"><button class="and" type="button">and</button><button class="or" type="button">or</button></div><div class="term-space"></div></section>
@@ -871,9 +884,11 @@ $('oi-main-import').addEventListener('click',()=>window.oiDialog('Import',(body,
  exportButton.addEventListener('click',()=>{close();$('oi-import-picker').accept='.zip,.json,application/zip,application/json';$('oi-import-picker').click()});
  const htmlButton=document.createElement('button');htmlButton.type='button';htmlButton.textContent='Saved HTML · recover conversations and research';
  htmlButton.addEventListener('click',()=>{close();$('oi-import-picker').accept='.html,.htm,text/html';$('oi-import-picker').click()});
- const note=document.createElement('p');note.textContent='ChatGPT exports merge automatically. Existing bookmarks, lists and folders are kept. To start fresh, open Settings.';
+ const aiReviewButton=document.createElement('button');aiReviewButton.type='button';aiReviewButton.textContent='AI Review JSON · add lists and bookmarks';
+ aiReviewButton.addEventListener('click',()=>{close();if(window.oiAIReviewImport)window.oiAIReviewImport.choose();else window.oiAlert('Unavailable','The AI Review importer did not load. Reload the page.')});
+ const note=document.createElement('p');note.textContent='ChatGPT exports merge automatically. AI Review JSON adds recommendations without removing existing organisation. To start fresh, open Settings.';
  const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=close;
- options.append(exportButton,htmlButton,note,cancel);body.append(options);
+ options.append(exportButton,htmlButton,aiReviewButton,note,cancel);body.append(options);
 }));
 $('oi-import-picker').addEventListener('change',async e=>{
  const f=e.target.files?.[0];e.target.value='';if(!f)return;
@@ -1037,6 +1052,24 @@ window.oiLoadResultsData=function(result){
 
 const escapeHTML=s=>String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const sortedLists=()=>window.oiArchive.research.lists.filter(l=>l.slot!=null).slice().sort((a,b)=>a.slot-b.slot);
+
+// Preserve the relevant match when a conversation is added to a list from search results.
+window.oiSearchEvidenceCandidate=cid=>{
+ const result=state.conversations.find(r=>String(r.id)===String(cid));
+ const app=window.oiArchive,entry=app?.entries.find(e=>String(e.id)===String(cid));
+ if(!result||!entry)return null;
+ for(const match of result.snippets||[]){
+  if(!match.activeTerms?.length)continue;
+  const message=entry.messages.find(m=>String(m.id)===String(match.id));
+  if(!message||typeof message.text!=='string')continue;
+  const lower=message.text.toLocaleLowerCase();
+  const starts=match.activeTerms.map(term=>lower.indexOf(String(term).toLocaleLowerCase())).filter(i=>i>=0);
+  if(!starts.length)continue;
+  const start=Math.min(...starts),end=Math.min(message.text.length,start+550);
+  return {messageId:message.id,snippet:window.oiBookmarkText.anchor(message.text,start,end),manual:false,source:'search-match'};
+ }
+ return null;
+};
 window.oiSyncResultBookmarks=()=>{
  const saved=new Set(window.oiArchive.research.bookmarks.map(b=>JSON.stringify([b.conversationId,b.messageId])));
  for(const mark of root.querySelectorAll('[data-bookmark-message]')){
@@ -1356,8 +1389,28 @@ render();
   renameList(listId,name){const list=byList(listId),value=uniqueName(name,listId);if(list&&value){list.name=value;changed()}},
   deleteList(listId){research().lists=research().lists.filter(l=>l.id!==listId);for(const side of ['include','exclude'])app.listFilter[side+'Ids']=app.listFilter[side+'Ids'].filter(x=>x!==listId);changed()},
   assignSlot(listId,slot){for(const list of research().lists){if(list.id===listId)list.slot=slot;else if(slot!==null&&list.slot===slot)list.slot=null}changed()},
-  toggleMembership(cid,listId){const list=byList(listId);if(!list)return;list.members=list.members.includes(cid)?list.members.filter(x=>x!==cid):[...list.members,cid];changed()},
-  bulkAdd(cids,listIds){for(const listId of listIds){const list=byList(listId);if(list)list.members=[...new Set([...list.members,...cids])]}changed()},
+  toggleMembership(cid,listId){
+   const list=byList(listId);if(!list)return;
+   const adding=!list.members.includes(cid);
+   list.members=adding?[...list.members,cid]:list.members.filter(x=>x!==cid);
+   if(adding){
+    const evidence=window.oiSearchEvidenceCandidate?.(cid);
+    if(evidence&&!list.snippets?.[cid]){list.snippets||={};list.snippets[cid]=evidence}
+   }else if(list.snippets)delete list.snippets[cid];
+   changed();
+  },
+  bulkAdd(cids,listIds){
+   for(const listId of listIds){
+    const list=byList(listId);if(!list)continue;
+    list.members=[...new Set([...list.members,...cids])];
+    for(const cid of cids){
+     if(list.snippets?.[cid])continue;
+     const evidence=window.oiSearchEvidenceCandidate?.(cid);
+     if(evidence){list.snippets||={};list.snippets[cid]=evidence}
+    }
+   }
+   changed();
+  },
   setListFilter(next){Object.assign(app.listFilter,next);changed()},
   bookmark(cid,mid,snippet){
    const existing=research().bookmarks.find(b=>b.conversationId===cid&&b.messageId===mid);
@@ -1372,6 +1425,15 @@ render();
   toggleFavourite(bookmarkId){const b=byBookmark(bookmarkId);if(b){b.favourite=!b.favourite;changed()}},
   editBookmark(bookmarkId,title,description){const b=byBookmark(bookmarkId);if(b){b.title=String(title).trim();b.description=String(description);changed()}},
   setBookmarkSnippet(bookmarkId,snippet){const b=byBookmark(bookmarkId);if(!b)return false;const text=window.oiBookmarkText.source(app,b)?.text;if(window.oiBookmarkText.inspect(text,snippet)!=='valid')return false;b.snippet=structuredClone(snippet);changed();return true},
+  setListSnippet(listId,cid,mid,snippet){
+   const list=byList(listId),entry=app.entries.find(e=>e.id===cid);
+   if(!list||!list.members.includes(cid)||!entry)return false;
+   const message=entry.messages.find(m=>m.id===mid);
+   if(!message||window.oiBookmarkText.inspect(message.text,snippet)!=='valid')return false;
+   list.snippets||={};
+   list.snippets[cid]={...list.snippets[cid],messageId:mid,snippet:structuredClone(snippet),manual:true};
+   changed();return true;
+  },
   moveBookmark(bookmarkId,folderId){const b=byBookmark(bookmarkId);if(b&&(folderId===null||research().folders.some(f=>f.id===folderId))){b.folderId=folderId;changed();return true}return false},
   isBookmarked(cid,mid){return research().bookmarks.some(b=>b.conversationId===cid&&b.messageId===mid)},
   saveSearch(name){if(!String(name).trim())return;research().savedSearches.push({id:id(),name:String(name).trim(),workspace:app.captureWorkspace()});changed()},
@@ -1617,7 +1679,7 @@ render();
   }
   if(!count&&(bookmarkTab!=='folders'||folderId))items.append(el('p','empty-bookmarks','No bookmarked messages in this view.'));if(bookmarkTab==='folders'&&!folderId&&!app.research.folders.length)items.append(el('p','','No folders yet.'));
  }
- function openSnippet(bookmark){
+ function openSnippet(bookmark,saveSnippet=snippet=>services.setBookmarkSnippet(bookmark.id,snippet)){
   snippetView.replaceChildren();const message=window.oiBookmarkText.source(app,bookmark);
   const header=el('header','internal-header'),actions=el('div','snippet-actions');header.append(el('h1','','Change snippet'),actions);actions.append(button('Cancel',back));snippetView.append(header);
   if(!message){snippetView.append(el('p','','Original message unavailable. Reimport its source to select a passage; saved details are retained.'));navigate('snippet');return;}
@@ -1639,7 +1701,7 @@ render();
   };
   const resize=delta=>{if(!valid())return;const index=words.findIndex(w=>w.index>=draft.start);if(index<0)return;const selected=words.filter(w=>w.index>=draft.start&&w.index<draft.end).length;wordCount=Math.max(1,Math.min(words.length-index,selected+delta));pick(index);preview.scrollTop=preview.scrollHeight};
   const shorter=button('Shorter',()=>resize(-10)),longer=button('Longer',()=>resize(10)),reset=button('Reset',()=>{draft=structuredClone(bookmark.originalSnippet);wordCount=Math.max(1,words.filter(w=>w.index>=draft.start&&w.index<draft.end).length||50);draw()});reset.setAttribute('aria-label','Reset to original snippet');
-  const save=button('Save',()=>{if(services.setBookmarkSnippet(bookmark.id,draft))back();else{status.textContent='Source changed. Reopen Change snippet to review.';save.disabled=true}});
+  const save=button('Save',()=>{if(saveSnippet(draft))back();else{status.textContent='Source changed. Reopen Change snippet to review.';save.disabled=true}});
   actions.append(shorter,longer,reset,save);header.append(preview,status);
   snippetView.append(el('p','snippet-instructions','Tap any word to start the preview there. Shorter and Longer adjust its length. Save keeps the selection; Cancel leaves it unchanged.'),full);
   const fragment=document.createDocumentFragment();let end=0;
@@ -1665,6 +1727,89 @@ render();
   const card=el('article','internal-card compact-entry'),row=el('div','entry-row');
   row.append(el('h3','',title),button(primaryLabel,open));const menu=button('⋯',actions);menu.className='ui-icon';menu.setAttribute('aria-label','More options for '+title);row.append(menu);card.append(row);return card;
  }
+
+ function editListSnippet(list,entry,cid,messageId){
+  const message=entry?.messages?.find(m=>m.id===messageId);
+  if(!message){window.oiAlert('Message unavailable','Re-import the original conversation to select this passage.');return}
+  const old=list.snippets?.[cid];
+  const valid=old?.messageId===messageId&&window.oiBookmarkText.inspect(message.text,old.snippet)==='valid';
+  const draft=valid?structuredClone(old.snippet):window.oiBookmarkText.anchor(message.text);
+  openSnippet({conversationId:cid,messageId,snippet:draft,originalSnippet:structuredClone(draft)},
+   selected=>services.setListSnippet(list.id,cid,messageId,selected));
+ }
+ function chooseListMessage(list,entry,cid){
+  if(!entry?.messages?.length){window.oiAlert('No messages','The source conversation is not available.');return}
+  window.oiDialog('Choose a message and passage',(body,close)=>{
+   const panel=el('div','oi-message-chooser');
+   const help=el('p','internal-meta','Search the original messages, select the one containing useful evidence, then tap the starting word and adjust the snippet.');
+   const input=el('input');input.type='search';input.placeholder='Search message text or role…';input.setAttribute('aria-label','Filter source messages');
+   const options=el('div','oi-message-options');
+   const messages=window.oiOrderedMessages(entry);
+   function draw(){
+    options.replaceChildren();
+    const q=input.value.trim().toLowerCase();
+    let found=0;
+    for(const [i,message] of messages.entries()){
+     const original=String(message.text||'');
+     if(!original.trim())continue;
+     const at=q?original.toLowerCase().indexOf(q):-1;
+     if(q&&at<0&&!String(message.role||'').toLowerCase().includes(q))continue;
+     const start=at>=0?Math.max(0,at-50):0;
+     const preview=window.oiSnippetDisplay(original.slice(start,start+190));
+     const select=button('Message '+(i+1)+' · '+(message.role||'speaker')+' · '+preview,()=>{
+      close();editListSnippet(list,entry,cid,message.id);
+     });
+     options.append(select);if(++found>=35)break;
+    }
+    if(!found)options.append(el('p','internal-meta','No matching messages.'));
+    else if(found>=35)options.append(el('p','internal-meta','Showing up to 35 messages; refine your search to narrow it down.'));
+   }
+   input.oninput=draw;
+   panel.append(help,input,options,button('Cancel',close));body.append(panel);draw();
+  });
+ }
+ function listCard(list,cid){
+  const entry=app.entries.find(e=>e.id===cid),heading=entry?.title||'Unavailable source: '+cid;
+  const saved=list.snippets?.[cid];
+  const message=entry?.messages?.find(m=>m.id===saved?.messageId);
+  const valid=Boolean(message&&window.oiBookmarkText.inspect(message.text,saved?.snippet)==='valid');
+  const card=el('article','internal-card bookmark-card oi-list-card');
+  const top=el('div','bookmark-card-heading');top.append(el('h2','',heading));
+  const more=button('⋯',()=>{
+   window.oiDialog('List conversation actions',(body,close)=>{
+    body.classList.add('action-menu');
+    if(message)body.append(button('Change snippet',()=>{close();editListSnippet(list,entry,cid,message.id)}));
+    body.append(button('Choose message and passage',()=>{close();chooseListMessage(list,entry,cid)}));
+    body.append(button('Remove from list',()=>{close();entryActions(heading,'Remove from list','Remove “'+heading+'” from “'+list.name+'”? The original conversation remains available.',()=>services.toggleMembership(cid,list.id))}));
+    body.append(button('Cancel',close));
+   });
+  });more.className='ui-icon';more.setAttribute('aria-label','Conversation options');top.append(more);card.append(top);
+  const excerpt=el('p','bookmark-excerpt',valid?window.oiSnippetDisplay(saved.snippet.text):(saved?'Saved source passage changed or is unavailable. Choose another passage.':'No selected passage yet. Choose a message and passage to make this list easier to review.'));
+  if(valid){excerpt.setAttribute('role','link');excerpt.tabIndex=0;excerpt.setAttribute('aria-label','Open original message containing this excerpt');
+   const open=()=>window.oiOpenReader(cid,message.id);
+   excerpt.onclick=open;excerpt.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}};
+  }
+  card.append(excerpt);
+  if(valid){
+   const expanded=expandedSnippets.has(list.id+':'+cid);excerpt.classList.toggle('expanded-snippet',expanded);
+   const toggle=button(expanded?'Show less':'Show more',()=>{
+    const k=list.id+':'+cid,next=!expandedSnippets.has(k);
+    if(next)expandedSnippets.add(k);else expandedSnippets.delete(k);
+    excerpt.classList.toggle('expanded-snippet',next);toggle.textContent=next?'Show less':'Show more';toggle.setAttribute('aria-expanded',String(next));
+   });
+   toggle.className='snippet-toggle';toggle.setAttribute('aria-expanded',String(expanded));toggle.hidden=true;card.append(toggle);
+   requestAnimationFrame(()=>{if(card.isConnected){const h=excerpt.scrollHeight,l=parseFloat(getComputedStyle(excerpt).lineHeight);toggle.hidden=h<=l*3+2}});
+  }
+  if(saved?.note)card.append(el('p','oi-list-note',saved.note));
+  const controls=el('div','oi-list-actions');
+  const context=button('Open context',()=>window.oiOpenReader(cid,message?.id||null));
+  context.disabled=!entry;
+  const choose=button(valid?'Change snippet':'Choose passage',()=>{
+   if(message)editListSnippet(list,entry,cid,message.id);else chooseListMessage(list,entry,cid);
+  });choose.disabled=!entry;
+  controls.append(context,choose);card.append(controls);
+  return card;
+ }
  function showLibrary(){
   library.replaceChildren();library.dataset.mode=libraryMode;
   const header=el('header','library-header');
@@ -1673,19 +1818,15 @@ render();
   library.append(header);
   if(libraryMode==='help'){
    for(const [title,text] of [
-    ['Offline archive','Import a ChatGPT export ZIP (including nested ZIPs) or conversation JSON. Conversation files are merged by ID. Older versions are retained where newer information already exists. Each JSON is saved in small local batches, and interrupted imports can be resumed by selecting the same ZIP. Bookmarks, lists and folders are retained. Keep your source export as an independent backup.'],
+    ['Offline archive','Use Import for ChatGPT exports, Saved HTML and AI Review JSON. Import a ChatGPT export ZIP (including nested ZIPs) or conversation JSON. Conversation files are merged by ID. Older versions are retained where newer information already exists. Each JSON is saved in small local batches, and interrupted imports can be resumed by selecting the same ZIP. Bookmarks, lists and folders are retained. Keep your source export as an independent backup.'],
     ['Search','Typing is a draft. Enter or and commits to the current AND group; Shift+Enter or or starts an alternative group. Tab navigates normally. View commits any remaining draft as AND. Case and exact-word options affect both search and highlighting. Dates and inclusive calendar-day filters use Australia/Adelaide with daylight saving; missing timestamps cannot satisfy a date bound.'],
     ['Project metadata','Supported explicit fields: '+app.projectDiagnostic().checked.join(', ')+'. Custom GPT IDs and workspace IDs are not projects. Default Project N labels remain stable across imports and saved HTML.'],
-    ['Lists','Lists hold entire conversations, independently of bookmark folders. Six visual quick-add choices and Include/Exclude Any/All rules remain available. Membership removal requires confirmation; original source is retained.'],
+    ['Lists','Lists hold entire conversations and can also save a verified, conversation-specific message passage. Each list may show a different passage for the same conversation. Change snippet lets you tap any word to choose the exact starting point. Include/Exclude Any/All rules remain available.'],
     ['Bookmarks and history','Each bookmark refers to one original message, with optional title/note, favourite star and one folder. All includes unfiled bookmarks; Folders shows actual folders and their direct contents. Search follows the selected tab and folder path. Change snippet lets you tap any starting word and adjust length. Save commits, Cancel leaves it unchanged. Missing/changed sources retain saved details. Bookmark removal offers session Undo. Folder deletion remains deferred. History retains every execution timestamp.'],
     ['Save and export','Save creates a NEW complete standalone HTML with source and research state. Export uses all eligible conversations across pages. Human timestamps use the same local calendar as the UI; JSON and AI provenance retain raw source timestamps. Both work offline. Reopen saved files to verify; actual iPhone behavior requires device testing.']]){const card=el('section','internal-card');card.append(el('h2','',title),el('p','',text));library.append(card)}
   }else if(libraryMode==='list'){
    const list=app.research.lists.find(l=>l.id===libraryId);if(!list){library.append(el('p','','List no longer exists.'));return;}
-   for(const cid of list.members){
-    const entry=app.entries.find(e=>e.id===cid),name=entry?.title||'Unavailable source: '+cid;
-    const card=compactEntry(name,'Open context',()=>window.oiOpenReader(cid,null),()=>entryActions(name,'Remove from list','Remove “'+name+'” from “'+list.name+'”? The original conversation and messages remain intact.',()=>services.toggleMembership(cid,list.id)));
-    card.querySelector('.entry-row>button').disabled=!entry;library.append(card);
-   }
+   for(const cid of list.members)library.append(listCard(list,cid));
    if(!list.members.length)library.append(el('p','','No conversations in this list.'));
   }else if(libraryMode==='bookmarks'){
    const items=el('section');items.id='bookmark-items';items.setAttribute('role','tabpanel');library.append(items);renderBookmarks(items);
@@ -1814,8 +1955,6 @@ window.oiBuildEvidenceExport=choice=>{
   const title=document.createElement('h3');title.textContent='Data management';
   const status=document.createElement('p');status.textContent=window.oiPwaTest?.status||'Storage status not available';
   const tip=document.createElement('p');tip.textContent='Conversations and research are saved locally in this installation. Safari and Home Screen apps may have separate storage.';
-  const aiImport=document.createElement('button');aiImport.type='button';aiImport.textContent='Import AI-reviewed JSON';
-  aiImport.onclick=()=>{close();if(window.oiAIReviewImport)window.oiAIReviewImport.choose();else window.oiAlert('Import unavailable','AI recommendations importer is not available yet.')};
   const aiCopy=document.createElement('button');aiCopy.type='button';aiCopy.textContent='Copy AI review JSON instructions';
   aiCopy.onclick=()=>{close();if(window.oiAIReviewImport)window.oiAIReviewImport.copyInstructions();else window.oiAlert('Unavailable','JSON instructions are not available yet.')};
   const clear=document.createElement('button');clear.type='button';clear.className='oi-clear-data';clear.textContent='Clear all app data';
@@ -1825,7 +1964,7 @@ window.oiBuildEvidenceExport=choice=>{
    });
   };
   const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=close;
-  main.append(title,status,tip,aiImport,aiCopy,clear,done);body.append(main);
+  main.append(title,status,tip,aiCopy,clear,done);body.append(main);
  }));
 })();
 </script><script data-local-persistence>
@@ -1916,6 +2055,10 @@ function combineResearch(existing,newData){
    if(byKey.has(id)){
     if(key==='lists'){
      const item=current[byKey.get(id)];item.members=[...new Set([...(item.members||[]),...(value.members||[])])];
+     if(value.snippets&&typeof value.snippets==='object'&&!Array.isArray(value.snippets)){
+      item.snippets||={};
+      for(const [cid,record] of Object.entries(value.snippets))if(!item.snippets[cid]?.manual)item.snippets[cid]=record;
+     }
     }
    }else{byKey.set(id,current.length);current.push(value)}
   }
@@ -2129,4 +2272,4 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
  window.oiImportSavedHtml=importSavedHtml;
 })();
 
-</script><script data-ai-review-import src="./ai-review-import.js?v=2"></script><script data-ai-review-package src="./ai-review-package.js?v=1"></script></body></html>
+</script><script data-ai-review-import src="./ai-review-import.js?v=3"></script><script data-ai-review-package src="./ai-review-package.js?v=1"></script></body></html>

@@ -11,15 +11,21 @@ const aiLabel=v=>/^AI\s*[-–—:]\s*/i.test(v)?v:'AI - '+v;
 const name=(v,fallback)=>aiLabel(clean(v,95)||fallback);
 const same=(a,b)=>String(a).toLowerCase()===String(b).toLowerCase();
 const key=()=> 'research-'+Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16)).join('-');
-const template={schema:SCHEMA,reviewLabel:'Example review',lists:[{label:'Funding concerns',conversationIds:['EXACT_CONVERSATION_ID']}],bookmarks:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',title:'Important funding discrepancy',group:'Funding/Discrepancies',description:'Optional reasoning'}]};
+const template={schema:SCHEMA,reviewLabel:'Example review',lists:[{label:'Funding concerns',conversationIds:['EXACT_CONVERSATION_ID'],snippets:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',quote:'EXACT RELEVANT WORDS FROM INSIDE THE ORIGINAL MESSAGE'}]}],bookmarks:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',title:'Important funding discrepancy',group:'Funding/Discrepancies',quote:'EXACT RELEVANT WORDS FROM THE SOURCE MESSAGE',description:'Optional reasoning'}]};
 function choose(){if(busy){window.oiAlert('Import in progress','Wait until the current AI review import finishes.');return}picker.value='';picker.click()}
 function reviewInstructions(){
  return [
- 'This package contains ChatGPT_Search_Evidence.json with original conversation and message IDs. Review that JSON and return a downloadable JSON file.',
- 'The JSON must have schema "'+SCHEMA+'". Include arrays "lists" and "bookmarks" (empty arrays allowed) and an optional "reviewLabel".',
- 'Each list needs a short "label" and a "conversationIds" array with EXACT IDs from the source export.',
- 'Each bookmark needs "conversationId", "messageId", a concise AI-suggested "title", a "group" for its folder (use / for nested groups), and optionally "description".',
- 'Use only exact source IDs. Never invent IDs or use conversation titles in place of IDs. Return no prose outside the JSON file.',
+ 'This ZIP contains ChatGPT_Search_Evidence.json. Review its ORIGINAL messages, exact conversation IDs, and message IDs.',
+ 'First follow the review objective from the user conversation. If the user gave NO objective or instruction, ask what they want identified or organised BEFORE reviewing. Do not assume a topic.',
+ 'DEFAULT IS SELECTIVE: recommend lists only for conversations relevant to the requested objective. Bookmark significant, useful messages only. Do not categorise or bookmark everything just to fill an output. Empty lists and bookmarks arrays are allowed.',
+ 'ONLY if the user explicitly requests comprehensive organisation, categorise all reviewed conversations in meaningful lists. Even then, do not create arbitrary bookmarks for every message.',
+ 'Do not equate repeated discussion with independent corroboration, and do not invent findings. Preserve source wording and distinguish observations from interpretations in descriptions.',
+ 'Return ONE downloadable JSON with schema "'+SCHEMA+'" and arrays "lists" and "bookmarks" (empty arrays allowed), and optional "reviewLabel".',
+ 'Each list needs a short "label" and "conversationIds" array containing only EXACT source IDs. To show useful evidence for each included conversation, add "snippets": [{"conversationId":"EXACT_ID","messageId":"EXACT_ID","quote":"EXACT VERBATIM PASSAGE"}]. Include only relevant list-specific snippets.',
+ 'The quote MUST copy a meaningful passage from the MIDDLE of the actual message when that is where the useful evidence begins. NEVER default to the first words merely because they start the message. Choose enough exact original text to convey the point; do not paraphrase or add leading ellipses. A message can supply different snippets for different lists.',
+ 'Each bookmark needs exact "conversationId" and "messageId", a concise "title", and a "group" (use / for nested folders), plus "quote" of the relevant original passage and optional "description". Bookmarks should identify specific useful messages, not simply duplicate every list membership.',
+ 'Do NOT invent or alter IDs, guess quotations or turn conversation titles into IDs. If a quote cannot be verified verbatim, omit that snippet rather than inventing one.',
+ 'The importer will validate IDs and verbatim quotes against original messages and preserve manually edited snippets. Reply only with the JSON file, not prose outside the file.',
  'Example:',JSON.stringify(template,null,2)
  ].join('\n');
 }
@@ -51,8 +57,23 @@ function apply(doc){
  const all=new Map(app.entries.map(e=>[String(e.id),e]));
  const research=app.research;
  for(const key of ['lists','bookmarks','folders'])if(!Array.isArray(research[key]))throw Error('Research records unavailable');
- const count={newLists:0,updatedLists:0,addedMembers:0,newBookmarks:0,newFolders:0,existingBookmarks:0,missingConversations:0,missingMessages:0,invalid:0};
+ const count={newLists:0,updatedLists:0,addedMembers:0,newSnippets:0,unverifiedSnippets:0,newBookmarks:0,newFolders:0,existingBookmarks:0,missingConversations:0,missingMessages:0,invalid:0};
  const stamp=new Date().toISOString(),meta=(kind,label)=>({schema:SCHEMA,kind,reviewLabel:doc.reviewLabel,requestedLabel:label,importedAt:stamp});
+ function verifySpan(message,details){
+ if(!message||typeof message.text!=='string'||!details||typeof details!=='object')return null;
+ const text=message.text;
+ const exact=typeof details.quote==='string'?details.quote:typeof details.snippetText==='string'?details.snippetText:typeof details.excerpt==='string'?details.excerpt:null;
+ const start=details.start,end=details.end;
+ if(Number.isInteger(start)&&Number.isInteger(end)&&start>=0&&end>start&&end<=text.length){
+  if(exact===null||text.slice(start,end)===exact)return {start,end,text:text.slice(start,end)};
+ }
+ if(typeof exact!=='string'||!exact.length||exact.length>10000)return null;
+ const found=text.indexOf(exact);
+ // If a passage occurs more than once, an explicit valid offset is required.
+ if(found<0||text.indexOf(exact,found+1)>=0)return null;
+ return {start:found,end:found+exact.length,text:exact};
+}
+
  const tagged=(obj,kind)=>obj?.aiReview?.schema===SCHEMA&&obj.aiReview.kind===kind;
  const unique=(requested,used)=>{let v=requested,i=2;while(used.has(v.toLowerCase()))v=requested+' '+i++;return v};
  for(const item of doc.lists){
@@ -72,6 +93,23 @@ function apply(doc){
   const members=new Set(list.members||[]);
   for(const cid of found)if(!members.has(cid)){members.add(cid);count.addedMembers++}
   list.members=[...members];
+  const picks=item.snippets??item.conversationSnippets??[];
+  if(!Array.isArray(picks)){count.invalid++;continue}
+  if(picks.length>ids.length+1000)throw Error('Too many snippets for one list');
+  list.snippets ||= {};
+  for(const pick of picks){
+   const cid=getId(pick?.conversationId||pick?.conversation_id),mid=getId(pick?.messageId||pick?.message_id);
+   if(!cid||!mid||!found.has(cid)){count.invalid++;continue}
+   if(list.snippets[cid]?.manual)continue;
+   const message=all.get(cid)?.messages?.find(m=>String(m.id)===mid);
+   if(!message){count.missingMessages++;continue}
+   const span=verifySpan(message,pick);
+   if(!span){count.unverifiedSnippets++;continue}
+   const current=list.snippets[cid];
+   if(current?.messageId===mid&&current?.snippet?.text===span.text)continue;
+   list.snippets[cid]={messageId:mid,snippet:span,manual:false,note:clean(pick.description||pick.reason||'',600),aiReview:meta('list-snippet',label)};
+   count.newSnippets++;
+  }
  }
  const bookmarkIds=new Set(research.bookmarks.map(b=>JSON.stringify([String(b.conversationId),String(b.messageId)])));
  function folder(label,parent,kind){
@@ -95,7 +133,7 @@ function apply(doc){
   const parts=clean(item.group||item.folder||'General',240).split('/').map(x=>clean(x,70)).filter(Boolean).slice(0,4);
   let parent=root;
   for(const part of parts.length?parts:['General'])parent=folder(name(part,'General'),parent.id,'folder');
-  const excerpt=window.oiBookmarkText.anchor(msg.text||'');
+  const excerpt=verifySpan(msg,item)||window.oiBookmarkText.anchor(msg.text||'');
   research.bookmarks.push({
    id:key(),conversationId:cid,messageId:mid,folderId:parent.id,favourite:false,
    title:name(item.title||item.label,'Message from '+clean(conv.title,55)),
@@ -122,10 +160,10 @@ async function load(file){
   }
   const message=[
    totals.newLists+' AI lists created; '+totals.updatedLists+' existing AI lists updated',
-   totals.addedMembers+' conversation assignments added',
+   totals.addedMembers+' conversation assignments added; '+totals.newSnippets+' verified source passages selected',
    totals.newBookmarks+' AI bookmarks added; '+totals.newFolders+' AI folders created',
    totals.existingBookmarks+' already-bookmarked messages left unchanged',
-   (totals.missingConversations+totals.missingMessages+totals.invalid)+' recommendations skipped (missing/unknown IDs or invalid)'
+   (totals.missingConversations+totals.missingMessages+totals.invalid)+' recommendations skipped (missing/unknown IDs or invalid); '+totals.unverifiedSnippets+' passages omitted because exact text could not be verified'
   ].join('\n');
   window.oiAlert('AI review imported',message);
  }catch(error){
