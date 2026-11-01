@@ -1,4 +1,4 @@
-const CACHE='chatgpt-search-ai-review-trial-shell-v10';
+const CACHE='chatgpt-search-ai-review-trial-shell-v11';
 const SHELL=['./index.html','./manifest.webmanifest','./ai-review-import.js?v=6','./ai-review-package.js?v=1','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('chatgpt-search-ai-review-trial-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
