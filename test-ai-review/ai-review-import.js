@@ -238,17 +238,21 @@ async function load(file){
  busy=true;const prior=structuredClone(app.research);let modified=false;
  try{
   const data=parse(JSON.parse(await file.text()));
+  const destination=await chooseDestination(data);
+  if(!destination)return;
   modified=true;
-  const totals=apply(data);
-  if(totals.newLists||totals.updatedLists||totals.newBookmarks||totals.updatedReasons){
+  const totals=apply(data,destination);
+  if(totals.newFolders||totals.newLists||totals.updatedLists||totals.newBookmarks||totals.updatedReasons){
    await storage.persistAIReview();app.changed();
   }
   const message=[
-   totals.newLists+' AI lists created; '+totals.updatedLists+' existing AI lists updated',
-   totals.addedMembers+' conversation assignments added; '+totals.newSnippets+' verified source passages selected; '+totals.updatedReasons+' AI explanations refreshed',
-   totals.newBookmarks+' AI bookmarks added; '+totals.newFolders+' AI folders created',
-   totals.existingBookmarks+' already-bookmarked messages left unchanged',
-   (totals.missingConversations+totals.missingMessages+totals.invalid)+' recommendations skipped (missing/unknown IDs or invalid); '+totals.unverifiedSnippets+' passages omitted because exact text could not be verified'
+   'Destination: '+totals.reviewName+' / Conversation lists + Bookmarks',
+   totals.newLists+' lists created; '+totals.updatedLists+' matching lists updated',
+   totals.addedMembers+' conversation assignments added; '+totals.newSnippets+' verified source passages; '+totals.updatedReasons+' explanations refreshed',
+   totals.newBookmarks+' bookmarks added; '+totals.newFolders+' folders created',
+   totals.duplicateCopies+' exact duplicate copies; '+totals.sameMessageCopies+' copies with other excerpts (marked for later review)',
+   totals.existingBookmarks+' already present in this review left unchanged',
+   (totals.missingConversations+totals.missingMessages+totals.invalid)+' invalid or unavailable recommendations skipped; '+totals.unverifiedSnippets+' unverified passages omitted'
   ].join('\n');
   window.oiAlert('AI review imported',message);
  }catch(error){
