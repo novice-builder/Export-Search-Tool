@@ -1,6 +1,6 @@
-const CACHE='chatgpt-search-tool-pwa-test-shell-v3';
+const CACHE='chatgpt-search-tool-pwa-test-shell-v4';
 const ROOT=new URL('./',self.registration.scope);
-const SHELL=['./index.html','./local-persistence.js?v=3','./saved-html-import.js?v=3','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
+const SHELL=['./index.html','./local-persistence.js?v=4','./saved-html-import.js?v=3','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
 self.addEventListener('install',event=>{
  event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting()));
 });

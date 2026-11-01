@@ -244,6 +244,30 @@
   }
  }
  function endSourceImport(){sourceImporting=false;}
+
+ // Delete saved test data only, never the user's original source files.
+ async function clearAllData(){
+  if(!active || working || importing || sourceImporting)throw new Error('Wait until the current import, save or restore finishes.');
+  if(timer){clearTimeout(timer);timer=null;}
+  pendingArchive=false;pendingState=false;
+  active=false;
+  try{
+   const database=await db();
+   await new Promise((resolve,reject)=>{
+    const tx=database.transaction('records','readwrite');
+    tx.objectStore('records').clear();
+    tx.oncomplete=()=>resolve();
+    tx.onerror=()=>reject(tx.error||new Error('Could not clear test app storage'));
+    tx.onabort=()=>reject(tx.error||new Error('Test app reset was cancelled'));
+   });
+   app.loadLocal({schema:'oi-linked-messages-v2',entries:[],imports:[],accent:'blue',research:{}});
+   lastError=null;
+   show('all test app data cleared on this device');
+  }catch(error){
+   show('RESET FAILED — '+(error?.name||'error'),true);
+   throw error;
+  }finally{active=true;}
+ }
  if(app.ready)void restore();
  // Basic service worker: only caches the public application files, never imported content.
  if('serviceWorker' in navigator){
@@ -251,5 +275,5 @@
    navigator.serviceWorker.register('./sw.js',{scope:'./'}).catch(e=>console.warn('Offline cache unavailable:',e));
   },{once:true});
  }
- window.oiPwaTest={get status(){return status.textContent},flush:()=>flush(),get ready(){return active},importPayload,beginSourceImport,saveSourceImport,endSourceImport};
+ window.oiPwaTest={get status(){return status.textContent},flush:()=>flush(),get ready(){return active},importPayload,beginSourceImport,saveSourceImport,endSourceImport,clearAllData};
 })();

@@ -243,8 +243,16 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #oi-action-dialog .danger{background:#9c2935;border-color:#9c2935;color:#fff}
 :is(#oi-action-dialog,#search-results-page .modal) button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 @media(max-width:380px){:is(#view-reader,#search-results-page) .toolbar-buttons{gap:4px}:is(#view-reader,#search-results-page) .toolbar-buttons button{font-size:11px;padding:6px}}
+
+/* Compact, accessible header utilities */
+#view-main .actions .oi-header-icon{display:inline-flex;align-items:center;justify-content:center;width:38px;min-width:38px;height:38px;min-height:38px;padding:0}
+#view-main .actions .oi-header-icon svg{height:20px;width:20px;display:block}
+#oi-action-dialog .oi-settings-section{display:grid;gap:9px;margin:6px 0}
+#oi-action-dialog .oi-settings-section h3{margin:5px 0 0;font-size:14px}
+#oi-action-dialog .oi-settings-section p{margin:0;color:var(--muted);white-space:normal}
+#oi-action-dialog .oi-settings-section .oi-settings-action{width:100%;text-align:left;white-space:normal;min-height:40px}
 </style></head><body><main class="shell" id="view-main">
-<header class="header"><h1>ChatGPT Search Tool</h1><div class="actions"><button type="button" id="oi-main-save">Save</button><button type="button" id="oi-main-import">Import</button><button type="button" id="oi-help">? Help / Guide</button></div></header><div id="oi-notice" class="status-notice" hidden><output id="oi-feedback" role="status" aria-live="polite" hidden></output><button type="button" id="oi-dismiss-status" aria-label="Dismiss status">×</button></div><button type="button" id="oi-undo-import" hidden>Undo import</button>
+<header class="header"><h1>ChatGPT Search Tool</h1><div class="actions"><button type="button" id="oi-main-save">Save</button><button type="button" id="oi-main-import">Import</button><button type="button" id="oi-help" class="oi-header-icon" title="Help and guide" aria-label="Help and guide"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.2"/><path d="M9.5 9a2.7 2.7 0 0 1 5.2 1c0 2-2.7 2.2-2.7 4"/><path d="M12 17.5h.01"/></svg></button><button type="button" id="oi-settings" class="oi-header-icon" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.4 2.8h3.2l.6 2.1c.6.2 1.1.4 1.6.7l2-.9 2.2 2.2-.9 2c.3.5.5 1 .7 1.6l2.1.6v3.2l-2.1.6c-.2.6-.4 1.1-.7 1.6l.9 2-2.2 2.2-2-.9c-.5.3-1 .5-1.6.7l-.6 2.1h-3.2l-.6-2.1c-.6-.2-1.1-.4-1.6-.7l-2 .9-2.2-2.2.9-2c-.3-.5-.5-1-.7-1.6l-2.1-.6v-3.2l2.1-.6c.2-.6.4-1.1.7-1.6l-.9-2 2.2-2.2 2 .9c.5-.3 1-.5 1.6-.7z"/><circle cx="12" cy="12" r="3.1"/></svg></button></div></header><div id="oi-notice" class="status-notice" hidden><output id="oi-feedback" role="status" aria-live="polite" hidden></output><button type="button" id="oi-dismiss-status" aria-label="Dismiss status">×</button></div><button type="button" id="oi-undo-import" hidden>Undo import</button>
 <section class="card search-card"><div class="search-row"><input class="search-input" type="text" placeholder="Search words or phrases…" aria-label="Search words or phrases"><button class="and" type="button">and</button><button class="or" type="button">or</button></div><div class="term-space"></div></section>
 <section class="card count-card"><div><div class="count-main" id="oi-message-total">0 messages</div><div class="count-sub" id="oi-conversation-total">Across 0 conversations</div></div><button class="view-btn" type="button">View messages</button></section>
 <details><summary><span class="section-title"><svg class="section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M4 17h16"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="17" r="2"/></svg><span>Search options</span></span><span class="chevron" aria-hidden="true"></span></summary><div class="panel-body"><div class="group"><div class="group-title">Search within</div><select id="oi-search-within"><option value="message">Same message</option><option value="conversation">Same conversation</option></select><div class="checks"><label><input type="checkbox" id="oi-case-sensitive">Case sensitive</label><label><input type="checkbox" id="oi-exact-words">Exact words</label></div></div></div></details>
@@ -1701,4 +1709,41 @@ window.oiBuildEvidenceExport=choice=>{
  return {payload,file:new File([text],'ChatGPT_Search_Results.'+extension,{type:type+';charset=utf-8'})};
 };
 
-</script><script data-local-persistence src="./local-persistence.js?v=3"></script><script data-saved-html-import src="./saved-html-import.js?v=3"></script></body></html>
+</script>
+<script data-settings-ui>
+/* Settings is independent of import/search processing. */
+(() => {
+ 'use strict';
+ const settings=document.getElementById('oi-settings');
+ if(!settings)return;
+ settings.addEventListener('click',()=>{
+  window.oiDialog('Settings',(body,close)=>{
+   const section=document.createElement('section');
+   section.className='oi-settings-section';
+   const h=document.createElement('h3');h.textContent='Data management';
+   const info=document.createElement('p');
+   info.textContent='Imported conversations and research records are stored on this device when local saving succeeds. Safari and a Home Screen installation may have separate storage.';
+   const status=document.createElement('p');
+   status.textContent=window.oiPwaTest?.status||'Local browser saving is unavailable in this version.';
+   const clear=document.createElement('button');
+   clear.type='button';clear.className='oi-settings-action danger';
+   clear.textContent='Clear all test app data';
+   clear.addEventListener('click',()=>{
+    if(!window.oiPwaTest?.clearAllData){
+     window.oiAlert('Local storage unavailable','This reset option is available in the installed test web app.');
+     return;
+    }
+    close();
+    window.oiConfirm('Clear all test app data?','This permanently removes imported conversations, bookmarks, folders, lists, saved searches and other locally stored information from this browser installation. It cannot be undone. Keep your original ZIP or saved HTML backup.','Clear all data',()=>{
+     void window.oiPwaTest.clearAllData()
+      .then(()=>window.oiAlert('Test app data cleared','All locally stored test app data has been cleared from this browser installation. Your original export files remain unchanged.'))
+      .catch(error=>window.oiAlert('Unable to clear data',error?.message||String(error)));
+    });
+   });
+   section.append(h,info,status,clear);
+   const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=close;
+   body.append(section,done);
+  });
+ });
+})();
+</script><script data-local-persistence src="./local-persistence.js?v=4"></script><script data-saved-html-import src="./saved-html-import.js?v=3"></script></body></html>
