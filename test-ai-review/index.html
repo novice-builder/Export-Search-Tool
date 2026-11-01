@@ -850,7 +850,7 @@ async function runSaveStage(i){if(busy||i!==saveState.step+1)return false;busy=t
  if(i===1){stageReport('Stage 1/5: serializing complete conversation data…');await yieldUI();saveState.raw=JSON.stringify(createPortableData());stageReport('Stage 1/5 complete: '+saveState.raw.length.toLocaleString()+' JSON characters; '+data.entries.length+' conversations.');}
  if(i===2){if(typeof CompressionStream==='undefined')throw Error('CompressionStream gzip is unavailable in this HTML viewer');stageReport('Stage 2/5: compressing '+saveState.raw.length.toLocaleString()+' JSON characters…');await yieldUI();saveState.gz=await new Response(new Blob([saveState.raw]).stream().pipeThrough(new CompressionStream('gzip'))).arrayBuffer();stageReport('Stage 2/5 complete: '+prettySize(saveState.gz.byteLength)+' gzip data.');saveState.raw=null;}
  if(i===3){stageReport('Stage 3/5: encoding '+prettySize(saveState.gz.byteLength)+' as Base64…');await yieldUI();saveState.b64=encodeBase64(new Uint8Array(saveState.gz));stageReport('Stage 3/5 complete: '+saveState.b64.length.toLocaleString()+' Base64 characters.');saveState.gz=null;}
- if(i===4){stageReport('Stage 4/5: assembling standalone HTML…');await yieldUI();const clone=document.documentElement.cloneNode(true);clone.querySelectorAll('#view-library,#view-reader,#view-snippet,#oi-action-dialog,#oi-bookmark-notice,#oi-include-choices,#oi-exclude-choices,#oi-priority-row').forEach(node=>node.remove());clone.querySelector('script[data-local-persistence]')?.remove();clone.querySelector('script[data-saved-html-import]')?.remove();clone.querySelector('script[data-settings-ui]')?.remove();clone.querySelector('script[data-ai-review-import]')?.remove();clone.querySelector('link[rel=manifest]')?.remove();clone.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(node=>node.remove());clone.querySelector('.list-rows').replaceChildren();clone.querySelector('#oi-undo-import').hidden=true;clone.querySelector('#oi-notice').hidden=true;clone.querySelector('#oi-feedback').hidden=true;clone.querySelector('main.shell').hidden=false;clone.querySelector('main.shell').inert=false;clone.querySelector('#oi-results-host').hidden=true;clone.querySelector('#compressed-archive').textContent=saveState.b64;clone.querySelector('#portable-data').textContent='{"entries":[],"accent":"blue","imports":[]}';clone.querySelector('#status').textContent='Opening saved compressed archive…';const rep=clone.querySelector('#stage-report');if(rep)rep.textContent='Saved archive ready. Imported conversations will restore automatically.';const html='<!doctype html>\n'+clone.outerHTML;saveState.file=new File([html],'ChatGPT_Search_Tool_Saved.html',{type:'text/html'});stageReport('Stage 4/5 complete: standalone HTML '+prettySize(saveState.file.size)+'.');saveState.b64=null;}
+ if(i===4){stageReport('Stage 4/5: assembling standalone HTML…');await yieldUI();const clone=document.documentElement.cloneNode(true);clone.querySelectorAll('#view-library,#view-reader,#view-snippet,#oi-action-dialog,#oi-bookmark-notice,#oi-include-choices,#oi-exclude-choices,#oi-priority-row').forEach(node=>node.remove());clone.querySelector('script[data-local-persistence]')?.remove();clone.querySelector('script[data-saved-html-import]')?.remove();clone.querySelector('script[data-settings-ui]')?.remove();clone.querySelector('script[data-ai-review-import]')?.remove();clone.querySelector('script[data-ai-review-package]')?.remove();clone.querySelector('link[rel=manifest]')?.remove();clone.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(node=>node.remove());clone.querySelector('.list-rows').replaceChildren();clone.querySelector('#oi-undo-import').hidden=true;clone.querySelector('#oi-notice').hidden=true;clone.querySelector('#oi-feedback').hidden=true;clone.querySelector('main.shell').hidden=false;clone.querySelector('main.shell').inert=false;clone.querySelector('#oi-results-host').hidden=true;clone.querySelector('#compressed-archive').textContent=saveState.b64;clone.querySelector('#portable-data').textContent='{"entries":[],"accent":"blue","imports":[]}';clone.querySelector('#status').textContent='Opening saved compressed archive…';const rep=clone.querySelector('#stage-report');if(rep)rep.textContent='Saved archive ready. Imported conversations will restore automatically.';const html='<!doctype html>\n'+clone.outerHTML;saveState.file=new File([html],'ChatGPT_Search_Tool_Saved.html',{type:'text/html'});stageReport('Stage 4/5 complete: standalone HTML '+prettySize(saveState.file.size)+'.');saveState.b64=null;}
  if(i===5){stageReport('Stage 5/5: handing '+prettySize(saveState.file.size)+' HTML to Share/download…');await yieldUI();const result=await window.oiDownloadFile(saveState.file);if(result.cancelled){stageReport('Save cancelled. The archive remains loaded.','success');return false;}stageReport(result.method==='share'?'Share returned. Reopen the saved HTML to verify.':'Download handed to the browser. Reopen the saved HTML to verify.','success');}
 
  saveState.step=i;if(i<5)stageReport($('stage-report').textContent+'\nElapsed: '+((performance.now()-start)/1000).toFixed(2)+' s. Tap stage '+(i+1)+' when ready.');
@@ -1219,16 +1219,17 @@ const exportDefaults={audience:"human",format:"markdown",scope:"context",context
 let exportDraft={...exportDefaults};
 function exportModal(){
  const ai=exportDraft.audience==="ai";
- const formats=ai?[["json","Structured JSON (.json)"],["markdown","Structured Markdown (.md)"]]:[["markdown","Markdown (.md)"],["html","HTML (.html)"],["text","Plain text (.txt)"]];
+ const formats=ai?[["json","JSON + instructions (.zip)"],["markdown","JSON + Markdown + instructions (.zip)"]]:[["markdown","Markdown (.md)"],["html","HTML (.html)"],["text","Plain text (.txt)"]];
  return `<h2 id="modal-title">Export search results</h2><p class="muted">${state.conversations.length.toLocaleString()} eligible conversations across all result pages</p><hr>
  <h3>Export for</h3><div class="checks">
  <label><input type="radio" name="export-audience" value="human" ${!ai?"checked":""}> <span><strong>Human reading</strong><br><span class="muted">Easy to read, share and review</span></span></label>
  <label><input type="radio" name="export-audience" value="ai" ${ai?"checked":""}> <span><strong>AI analysis</strong><br><span class="muted">Structured for importing into AI tools</span></span></label></div>
+ ${ai?`<p class="muted">One ZIP automatically includes the structured evidence JSON and AI review instructions. Upload that ZIP to ChatGPT for review, then import its recommendations under Settings.</p>`:""}
  <hr><h3>File format</h3><div class="checks">${formats.map(([value,label])=>`<label><input type="radio" name="export-format" value="${value}" ${exportDraft.format===value?"checked":""}> ${label}</label>`).join("")}</div>
  <hr><h3>Content to include</h3><div class="checks">
  ${[["matches","Matching messages only"],["context","Matching messages + surrounding context"],["conversations","Entire matching conversations"]].map(([value,label])=>`<label><input type="radio" name="export-scope" value="${value}" ${exportDraft.scope===value?"checked":""}> ${label}</label>`).join("")}</div>
  ${exportDraft.scope==="context"?`<div class="field"><label for="export-context">Context messages on each side</label><select id="export-context">${options([0,1,2,3,5,10],exportDraft.context)}</select></div><p class="muted">Overlapping context windows are merged. Context uses original neighbors, including messages outside role/date filters.</p>`:""}
- <hr><div class="checks"><label><input type="checkbox" id="export-sources" ${exportDraft.sources?"checked":""}><span><strong>Include source references</strong><br><span class="muted">Conversation and message IDs, roles, timestamps and project details where available</span></span></label></div>
+ <hr><div class="checks"><label><input type="checkbox" id="export-sources" ${ai?"checked disabled":(exportDraft.sources?"checked":"")}><span><strong>Include source references</strong><br><span class="muted">Conversation and message IDs, roles, timestamps and project details where available</span></span></label></div>
  <p class="muted">Exports contain complete original message text. Hits and surrounding context are labelled separately; previews do not replace source evidence.</p>
  ${footer("Export","export")}`;
 }
@@ -1241,7 +1242,7 @@ function readExportDraft(){
  if(format)exportDraft.format=format.value;
  if(scope)exportDraft.scope=scope.value;
  const context=modal.querySelector('#export-context');if(context)exportDraft.context=Number(context.value);
- const sources=modal.querySelector('#export-sources');if(sources)exportDraft.sources=sources.checked;
+ const sources=modal.querySelector('#export-sources');if(sources)exportDraft.sources=exportDraft.audience==="ai"||sources.checked;
 }
 function listsModal(){return `<h2 id="modal-title">Add results to lists</h2><p class="muted">${state.conversations.length.toLocaleString()} matching conversations across all result pages. Existing memberships will not be duplicated.</p><hr><div class="checks">${window.oiArchive.research.lists.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(l=>`<label><input type="checkbox" value="${escapeHTML(l.id)}"> ${escapeHTML(l.name)}</label>`).join("")}</div>${footer("Add to selected lists","lists")}`;}
 let draftDirection=state.display.direction,modalReturnFocus=null;
@@ -1265,8 +1266,18 @@ root.addEventListener("click",event=>{
    const changed=Object.keys(next).some(k=>next[k]!==state.display[k]);closeModal();
    if(changed){const reset=next.perChat!==state.display.perChat;state.display=next;state.navigation.page=1;if(reset)state.navigation.offsets={};requestAnimationFrame(render);}
   }else if(button.dataset.apply==="export"){
-   readExportDraft();window.oiDownloadFile(window.oiBuildEvidenceExport(exportDraft).file).catch(error=>window.oiAlert('Export failed',error.message));
+   readExportDraft();
+   const choice={...exportDraft};
    closeModal();
+   if(choice.audience==="ai"){
+    window.oiArchive?.report?.('Preparing AI review package (evidence JSON + instructions)…',{kind:'progress'});
+    Promise.resolve().then(()=>window.oiBuildAIReviewPackage(choice))
+     .then(file=>window.oiDownloadFile(file))
+     .then(result=>{if(result&&!result.cancelled)window.oiArchive?.report?.('AI review ZIP ready to upload · includes evidence JSON and instructions.',{kind:'success'})})
+     .catch(error=>window.oiAlert('AI review ZIP export failed',error?.message||String(error)));
+   }else{
+    window.oiDownloadFile(window.oiBuildEvidenceExport(choice).file).catch(error=>window.oiAlert('Export failed',error?.message||String(error)));
+   }
   }else{
    const ids=[...$("modal-content").querySelectorAll('input:checked')].map(input=>input.value);
    const cids=state.conversations.map(c=>c.id);closeModal();window.oiResearch.bulkAdd(cids,ids);
@@ -1757,7 +1768,7 @@ render();
 window.oiDownloadFile=async file=>{
  if(navigator.canShare?.({files:[file]})&&navigator.share){
   try{await navigator.share({files:[file]});return {method:'share'}}
-  catch(error){if(error.name==='AbortError')return {cancelled:true};if(error.name!=='NotAllowedError')throw error;}
+  catch(error){if(error.name==='AbortError')return {cancelled:true};if(error.name!=='NotAllowedError'&&error.name!=='InvalidStateError')throw error;}
  }
  const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download=file.name;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);return {method:'download'};
 };
@@ -2118,4 +2129,4 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
  window.oiImportSavedHtml=importSavedHtml;
 })();
 
-</script><script data-ai-review-import src="./ai-review-import.js?v=1"></script></body></html>
+</script><script data-ai-review-import src="./ai-review-import.js?v=2"></script><script data-ai-review-package src="./ai-review-package.js?v=1"></script></body></html>

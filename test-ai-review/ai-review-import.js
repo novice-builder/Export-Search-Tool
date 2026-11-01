@@ -13,15 +13,18 @@ const same=(a,b)=>String(a).toLowerCase()===String(b).toLowerCase();
 const key=()=> 'research-'+Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16)).join('-');
 const template={schema:SCHEMA,reviewLabel:'Example review',lists:[{label:'Funding concerns',conversationIds:['EXACT_CONVERSATION_ID']}],bookmarks:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',title:'Important funding discrepancy',group:'Funding/Discrepancies',description:'Optional reasoning'}]};
 function choose(){if(busy){window.oiAlert('Import in progress','Wait until the current AI review import finishes.');return}picker.value='';picker.click()}
-function copyInstructions(){
- const text=[
- 'Review the attached ChatGPT Search Tool evidence export and return a downloadable JSON file.',
+function reviewInstructions(){
+ return [
+ 'This package contains ChatGPT_Search_Evidence.json with original conversation and message IDs. Review that JSON and return a downloadable JSON file.',
  'The JSON must have schema "'+SCHEMA+'". Include arrays "lists" and "bookmarks" (empty arrays allowed) and an optional "reviewLabel".',
  'Each list needs a short "label" and a "conversationIds" array with EXACT IDs from the source export.',
  'Each bookmark needs "conversationId", "messageId", a concise AI-suggested "title", a "group" for its folder (use / for nested groups), and optionally "description".',
  'Use only exact source IDs. Never invent IDs or use conversation titles in place of IDs. Return no prose outside the JSON file.',
  'Example:',JSON.stringify(template,null,2)
  ].join('\n');
+}
+function copyInstructions(){
+ const text=reviewInstructions();
  const fallback=()=>window.oiDialog('AI review JSON instructions',(body,close)=>{
   const intro=document.createElement('p');intro.textContent='Copy the instructions into the AI review conversation.';
   const area=document.createElement('textarea');area.value=text;area.readOnly=true;area.rows=13;area.style.width='100%';
@@ -135,5 +138,5 @@ async function load(file){
  }finally{busy=false}
 }
 picker.addEventListener('change',()=>{const file=picker.files?.[0];picker.value='';if(file)void load(file)});
-window.oiAIReviewImport={choose,copyInstructions,template};
+window.oiAIReviewImport={choose,copyInstructions,template,instructions:reviewInstructions};
 })();
