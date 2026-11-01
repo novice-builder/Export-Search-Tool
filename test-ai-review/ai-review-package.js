@@ -64,6 +64,7 @@ async function makeZip(items){
  number32(ev,12,centralSize);number32(ev,16,offset);number16(ev,20,0);
  return new File([...parts,...central,end],'ChatGPT_Search_AI_Review_Package.zip',{type:'application/zip'});
 }
+window.oiZipAIReviewFiles=makeZip;
 window.oiBuildAIReviewPackage=async choice=>{
  const guide=window.oiAIReviewImport?.instructions?.();
  if(!guide)throw Error('AI review instructions are unavailable');
