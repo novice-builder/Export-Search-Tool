@@ -119,7 +119,7 @@ function reviewDestination(doc,choice,count){
   review=research.folders.find(f=>f.id===choice.folderId);
   if(!review)throw Error('The chosen destination folder is no longer available');
  }else{
-  let root=research.folders.find(f=>f.parentId===null&&eq(f.name,'AI Reviewed'));
+  let root=research.folders.find(f=>f.parentId===null&&(eq(f.name,'AI Reviewed')||eq(f.name,'AI Reviews')));
   if(!root)root=create('AI Reviewed',null,{aiOrganised:true});
   const base=choice.name||'AI Review';let title=base,i=2;
   while(research.folders.some(f=>f.parentId===root.id&&eq(f.name,title)))title=base+' '+i++;
