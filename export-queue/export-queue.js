@@ -11,50 +11,93 @@ const obj=(type,id)=>type==='folder'?research().folders.find(x=>x.id===id):type=
 const valid=k=>{const p=split(k);return !!(p&&obj(p.type,p.id))};
 function state(){
  if(!Array.isArray(research().exportQueue))research().exportQueue=[];
- const unique=new Set();
- research().exportQueue=research().exportQueue.filter(k=>{
-  if(typeof k!=='string'||!valid(k)||unique.has(k))return false;
-  unique.add(k);return true;
- });
- return research().exportQueue;
+ const a=research().exportQueue,seen=new Set();
+ const kept=a.filter(k=>{if(typeof k!=='string'||!valid(k)||seen.has(k))return false;seen.add(k);return true});
+ if(kept.length!==a.length)a.splice(0,a.length,...kept);
+ return a;
+}
+function exclusions(){
+ if(!Array.isArray(research().exportQueueExcluded))research().exportQueueExcluded=[];
+ const a=research().exportQueueExcluded,direct=state(),seen=new Set();
+ const kept=a.filter(k=>{if(!direct.length||typeof k!=='string'||!valid(k)||direct.includes(k)||seen.has(k))return false;seen.add(k);return true});
+ if(kept.length!==a.length)a.splice(0,a.length,...kept);
+ return a;
 }
 const changed=()=>app.changed();
-function add(keys){
- const current=state(),seen=new Set(current);let added=0;
- for(const k of keys){if(!valid(k)||seen.has(k))continue;current.push(k);seen.add(k);added++}
- if(added)changed();return added;
-}
-function remove(keys){
- const set=new Set(keys),current=state(),next=current.filter(k=>!set.has(k)),removed=current.length-next.length;
- if(removed){research().exportQueue=next;changed()}return removed;
-}
-function clear(){if(!state().length)return;research().exportQueue=[];changed()}
 function has(type,id){return state().includes(ref(type,id))}
 function status(type,id){
- if(has(type,id))return 'direct';
- const folders=new Set(state().filter(k=>k.startsWith('folder:')).map(k=>k.slice(7)));
- let parent=obj(type,id);
- if(type!=='folder')parent=obj('folder',parent?.folderId);
- else parent=obj('folder',parent?.parentId);
+ const item=obj(type,id);if(!item)return '';
+ const chosen=new Set(state()),denied=new Set(exclusions()),key=ref(type,id);
+ if(chosen.has(key))return 'direct';
+ let nearest=denied.has(key)?'excluded':'',hasSelectedAncestor=false;
+ let parent=type==='folder'?obj('folder',item.parentId):obj('folder',item.folderId);
  const seen=new Set();
  while(parent&&!seen.has(parent.id)){
-  if(folders.has(parent.id))return 'included';
-  seen.add(parent.id);parent=obj('folder',parent.parentId);
+  seen.add(parent.id);
+  const k=ref('folder',parent.id);
+  if(chosen.has(k)){hasSelectedAncestor=true;if(!nearest)nearest='included'}
+  if(denied.has(k)&&!nearest)nearest='excluded';
+  parent=obj('folder',parent.parentId);
  }
- return '';
+ return nearest==='excluded'&&!hasSelectedAncestor?'':nearest;
 }
+function add(keys){
+ const current=state(),denied=exclusions(),seen=new Set(current);let count=0;
+ for(const k of keys){
+  if(!valid(k)||seen.has(k))continue;
+  const p=split(k),i=denied.indexOf(k);
+  if(i>=0){denied.splice(i,1);count++}
+  if(status(p.type,p.id)==='included')continue;
+  current.push(k);seen.add(k);count++;
+ }
+ if(count)changed();return count;
+}
+// Queue management removes directly selected items only.
+function remove(keys){
+ const set=new Set(keys),a=state(),old=a.length;
+ for(let i=a.length-1;i>=0;i--)if(set.has(a[i]))a.splice(i,1);
+ if(!a.length)research().exportQueueExcluded=[];
+ if(a.length!==old)changed();
+ return old-a.length;
+}
+// Library action excludes a selected child even if its parent folder remains queued.
+function exclude(keys){
+ let count=0;
+ for(const k of keys){
+  if(!valid(k))continue;
+  const p=split(k),before=status(p.type,p.id);
+  if(before!=='direct'&&before!=='included')continue;
+  if(before==='direct'){const a=state(),i=a.indexOf(k);if(i>=0)a.splice(i,1)}
+  if(status(p.type,p.id)==='included'){
+   const denied=exclusions();if(!denied.includes(k))denied.push(k);
+  }
+  count++;
+ }
+ if(!state().length)research().exportQueueExcluded=[];
+ if(count)changed();return count;
+}
+function clear(){
+ if(!state().length&&!exclusions().length)return;
+ research().exportQueue=[];research().exportQueueExcluded=[];changed();
+}
+function excludedItems(){return exclusions().filter(k=>{const p=split(k);return status(p.type,p.id)==='excluded'})}
 function expanded(){
- const direct=state().map(split),folders=new Map(),lists=new Map(),bookmarks=new Map(),seenFolders=new Set();
- function includeFolder(id){
-  if(seenFolders.has(id))return;const f=obj('folder',id);if(!f)return;seenFolders.add(id);folders.set(id,f);
-  for(const child of research().folders.filter(x=>x.parentId===id))includeFolder(child.id);
-  for(const list of research().lists.filter(x=>x.folderId===id))lists.set(list.id,list);
-  for(const b of research().bookmarks.filter(x=>x.folderId===id))bookmarks.set(b.id,b);
+ const direct=state().map(split),folders=new Map(),lists=new Map(),bookmarks=new Map(),visited=new Set();
+ function walk(id){
+  if(visited.has(id))return;
+  const f=obj('folder',id);if(!f)return;
+  visited.add(id);
+  if(status('folder',id)!=='excluded')folders.set(id,f);
+  for(const child of research().folders.filter(x=>x.parentId===id))walk(child.id);
+  for(const l of research().lists.filter(x=>x.folderId===id))
+   if(status('list',l.id)!=='excluded')lists.set(l.id,l);
+  for(const b of research().bookmarks.filter(x=>x.folderId===id))
+   if(status('bookmark',b.id)!=='excluded')bookmarks.set(b.id,b);
  }
  for(const p of direct){
-  if(p.type==='folder')includeFolder(p.id);
-  if(p.type==='list'){const l=obj('list',p.id);if(l)lists.set(l.id,l)}
-  if(p.type==='bookmark'){const b=obj('bookmark',p.id);if(b)bookmarks.set(b.id,b)}
+  if(p.type==='folder')walk(p.id);
+  if(p.type==='list'){const v=obj('list',p.id);if(v)lists.set(v.id,v)}
+  if(p.type==='bookmark'){const v=obj('bookmark',p.id);if(v)bookmarks.set(v.id,v)}
  }
  return {direct,folders:[...folders.values()],lists:[...lists.values()],bookmarks:[...bookmarks.values()]};
 }
@@ -120,6 +163,10 @@ function makeEvidence(choice){
   schema:'chatgpt-search-evidence-v1',exportKind:'organisation-export-queue',
   exportedAt:new Date().toISOString(),scope:choice.scope,
   sourceSelection:selections,
+  sourceExclusions:excludedItems().map(k=>{
+   const p=split(k),item=obj(p.type,p.id);
+   return {type:p.type,id:p.id,label:name(k),folderPath:p.type==='folder'?folderPath(item?.parentId):folderPath(item?.folderId)};
+  }),
   organisation:{
    folders:data.folders.map(f=>({id:f.id,name:f.name,parentId:f.parentId,path:folderPath(f.id)})),
    lists:data.lists.map(l=>({id:l.id,name:l.name,folderId:l.folderId??null,
@@ -143,7 +190,7 @@ function buildInstructions(choice,payload){
   objective||'No task provided. Ask the user what to identify, consolidate or refine before conducting a review.',
   '',
   'The attached ChatGPT_Search_Evidence.json contains original messages, exact IDs, saved bookmark passages, conversation lists, and folder relationships.',
-  'The sourceSelection field identifies the items manually added to the export queue. organisation contains the expanded contents, including nested folders.',
+  'The sourceSelection field identifies manually added items. sourceExclusions identifies items omitted from included folders. organisation contains only included items; never re-add sourceExclusions.',
   'Preserve original source IDs, quotations and provenance. Distinguish source evidence, prior user notes and AI interpretation. Never invent missing source material.',
   'The same source message can have multiple different saved bookmarks or highlighted passages. Preserve these as separate user-created bookmarks.',
   'When combining previous findings, retain distinct facts, chronology, qualified claims and reasoning chains. Flag uncertainty and do not silently drop approved findings.',
@@ -176,5 +223,5 @@ async function buildPackage(choice){
  const zip=await window.oiZipAIReviewFiles(items);
  return new File([zip],'ChatGPT_Search_Export_Queue.zip',{type:'application/zip'});
 }
-window.oiExportQueue={items:()=>state().slice(),add,remove,clear,has,status,expanded,name,buildPackage,makeEvidence};
+window.oiExportQueue={items:()=>state().slice(),excludedItems,add,remove,exclude,clear,has,status,expanded,name,buildPackage,makeEvidence};
 })();
