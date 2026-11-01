@@ -536,7 +536,7 @@ window.oiTime={
 
 /* Local download filename preferences; downloaded extensions are selected by exporter. */
 window.oiFileNames=(()=>{
- const defaults=Object.freeze({savedHtml:'ChatGPT_Search_Tool_Saved',searchResults:'ChatGPT_Search_Results',searchAI:'ChatGPT_Search_AI_Review_Package',exportQueue:'ChatGPT_Search_Export_Queue'});
+ const defaults=Object.freeze({savedHtml:'Saved State',searchResults:'Search Results',searchAI:'Search Results - AI Review',exportQueue:'Selection Export - AI Review'});
  const extensions=Object.freeze({savedHtml:'html',searchResults:'md',searchAI:'zip',exportQueue:'zip'});
  function clean(value,key){
   let result=String(value??'').trim().replace(/[\\/:*?"<>|\u0000-\u001f\u007f]/g,'_');
