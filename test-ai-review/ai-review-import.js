@@ -94,6 +94,11 @@ function apply(doc){
   const members=new Set(list.members||[]);
   for(const cid of found)if(!members.has(cid)){members.add(cid);count.addedMembers++}
   list.members=[...members];
+  // New recommendations share one folder tree with bookmarks. Existing manual folders are preserved.
+  if(list.folderId===null||list.folderId===undefined){
+   const reviewFolder=window.oiUnifiedData?.reviewFolder(doc.reviewLabel);
+   if(reviewFolder)list.folderId=reviewFolder;
+  }
   const picks=item.snippets??item.conversationSnippets??[];
   if(!Array.isArray(picks)){count.invalid++;continue}
   if(picks.length>ids.length+1000)throw Error('Too many snippets for one list');
@@ -134,7 +139,7 @@ function apply(doc){
   if(!msg){count.missingMessages++;continue}
   const bookmarkKey=JSON.stringify([cid,mid]);
   if(bookmarkIds.has(bookmarkKey)){count.existingBookmarks++;continue}
-  if(!root)root=folder('AI Bookmarks',null,'root');
+  if(!root)root=folder('Bookmarks',window.oiUnifiedData?.reviewFolder(doc.reviewLabel)??null,'root');
   const parts=clean(item.group||item.folder||'General',240).split('/').map(x=>clean(x,70)).filter(Boolean).slice(0,4);
   let parent=root;
   for(const part of parts.length?parts:['General'])parent=folder(name(part,'General'),parent.id,'folder');
