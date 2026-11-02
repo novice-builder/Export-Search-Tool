@@ -363,7 +363,13 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #view-organisation .oi-org-icon-button{display:inline-flex;align-items:center;justify-content:center;border:0;background:transparent;color:var(--ink);width:40px;height:40px;min-width:40px;min-height:40px;margin:0;padding:7px;border-radius:8px}
 #view-organisation .oi-org-icon-button .ui-glyph{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 #view-organisation .oi-org-icon-button:focus-visible,#view-organisation .oi-org-quick-toggle:focus-visible,#view-organisation .oi-org-breadcrumbs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-#view-organisation .oi-org-selection-info{font-size:12px;color:var(--muted);margin:-2px 2px 8px}
+#view-organisation .oi-org-selection-info{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--muted);margin:-2px 2px 8px}
+#view-organisation .oi-org-select-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#view-organisation .oi-org-select-actions button{border:0;background:transparent;font:inherit;font-size:12px;color:var(--accent);font-weight:600;min-height:36px;padding:4px 5px}
+#view-organisation .oi-org-select-actions button:disabled{opacity:.35}
+#view-organisation .oi-org-select-toggle{border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-size:12px;font-weight:650;min-height:36px;padding:6px 9px}
+#view-organisation .oi-org-select-toggle[aria-pressed=true]{border-color:var(--accent)}
+#view-organisation .oi-org-select-actions button:focus-visible,#view-organisation .oi-org-select-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #view-organisation .oi-org-entry{background:var(--card);min-height:54px;padding:4px 6px;margin:0 0 8px;border:0;border-bottom:1px solid var(--line);border-radius:0}
 #view-organisation .oi-org-item{min-height:48px;padding:7px 5px;gap:12px}
 #view-organisation .oi-org-folder-entry .oi-org-icon{color:var(--ink)}
@@ -2919,7 +2925,7 @@ if(!app||!api||!svc||!view)return;
 const el=(tag,cls,text)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(text!==undefined)n.textContent=text;return n};
 const button=(label,action,cls)=>{const n=el('button',cls||'',label);n.type='button';n.onclick=action;return n};
 const nice=n=>Number(n).toLocaleString();
-let at=null,virtual=null,query='',typeFilter='all',selecting=false,shown=new Set(),selected=new Set(),limit=80,loaded=false,quickAccessOpen=false,duplicatesOnly=false;
+let at=null,virtual=null,query='',typeFilter='all',selecting=false,shown=new Set(),selected=new Set(),selectableKeys=new Set(),limit=80,loaded=false,quickAccessOpen=false,duplicatesOnly=false;
 const s=()=>app.research;
 function pinnedFolderIds(){return Array.isArray(s().quickAccessFolderIds)?s().quickAccessFolderIds.filter(id=>api.folder(id)):[]}
 function isPinnedFolder(id){return pinnedFolderIds().includes(id)}
@@ -2933,6 +2939,9 @@ const isChosen=(type,id)=>selected.has(type+':'+id);
 function changedSelection(type,id,checked){
  const k=type+':'+id;if(checked)selected.add(k);else selected.delete(k);render(true);
 }
+function selectAllHere(){for(const k of selectableKeys)selected.add(k);render(true)}
+function deselectAllHere(){selected.clear();render(true)}
+function toggleSelectMode(){selecting=!selecting;selected.clear();render(true)}
 const checkbox=(type,id,label)=>{
  const n=el('input');n.type='checkbox';n.checked=isChosen(type,id);n.setAttribute('aria-label','Select '+label);
  n.onclick=e=>e.stopPropagation();n.onchange=e=>{e.stopPropagation();changedSelection(type,id,n.checked)};return n;
@@ -2961,7 +2970,7 @@ function entryRow(parent,icon,label,secondary,onOpen,{type,id,more,badge}={}){
  const row=el('div','oi-org-entry');
  if(type==='folder')row.classList.add('oi-org-folder-entry');
  if(selecting&&type&&id)row.append(checkbox(type,id,label));
- const main=button('',onOpen,'oi-org-item');
+ const main=button('',()=>{if(selecting&&type&&id)changedSelection(type,id,!isChosen(type,id));else onOpen()},'oi-org-item');
  const glyph=el('span','oi-org-icon');
  if(icon==='bookmark'||icon==='list'||icon==='folder')glyph.append(organisationGlyph(icon));
  else glyph.textContent=icon;
@@ -2998,14 +3007,14 @@ function optionsMenu(){
  window.oiDialog('Organisation options',(body,close)=>{
   body.classList.add('action-menu');
   body.append(button(selecting?'Done selecting':'Select',()=>{
-   close();selecting=!selecting;selected.clear();render(true);
+   close();toggleSelectMode();
   }));
   if(selecting){
    if(selected.size&&window.oiExportQueue)body.append(button(virtual==='export-queue'?'Remove selected from Export Queue':'Add selected to Export Queue',()=>{close();const n=virtual==='export-queue'?window.oiExportQueue.remove([...selected]):window.oiExportQueue.add([...selected]);selected.clear();render(true);announce(n+' item(s) processed')}));
     body.append(button('Select all visible',()=>{
-    close();for(const key of shown)selected.add(key);render(true);
+    close();selectAllHere();
    }));
-   body.append(button('Deselect all',()=>{close();selected.clear();render(true)}));
+   body.append(button('Deselect all',()=>{close();deselectAllHere()}));
   }
   if(virtual===null){
    const viewModes={all:'All items',lists:'Conversation lists',bookmarks:'Bookmarks'};
@@ -3055,11 +3064,25 @@ function pathTools(root){
   }
  }
  const actions=el('div','oi-org-pathactions');
+ const selectToggle=button(selecting?'Done':'Select',toggleSelectMode,'oi-org-select-toggle');
+ selectToggle.setAttribute('aria-pressed',String(selecting));
+ selectToggle.setAttribute('aria-label',selecting?'Finish selecting items':'Select folders, lists or bookmarks');
+ actions.append(selectToggle);
  actions.append(compactAction('New folder, list or saved search','plus',()=>newMenu()));
  actions.append(compactAction('More options, including Select','more',()=>optionsMenu()));
  bar.append(breadcrumbs,actions);root.append(bar);
  requestAnimationFrame(()=>{if(breadcrumbs.isConnected)breadcrumbs.scrollLeft=breadcrumbs.scrollWidth});
- if(selecting)root.append(el('p','oi-org-selection-info',selected.size+' selected · Tap items to select'));
+ if(selecting){
+  const info=el('div','oi-org-selection-info');
+  info.append(el('span','',selected.size+' selected · Tap items to select'));
+  const buttons=el('div','oi-org-select-actions');
+  const all=button('Select all',selectAllHere),none=button('Deselect all',deselectAllHere);
+  all.disabled=selectableKeys.size===0||[...selectableKeys].every(key=>selected.has(key));
+  none.disabled=selected.size===0;
+  all.setAttribute('aria-label','Select all items in the current folder or filtered view');
+  none.setAttribute('aria-label','Deselect all selected items');
+  buttons.append(all,none);info.append(buttons);root.append(info);
+ }
 }
 function quickAccess(root){
  const host=el('section','oi-org-quick');
@@ -3371,6 +3394,11 @@ function render(keepScroll=false){
  const bookmarkItems=s().bookmarks.filter(b=>
   (virtual==='bookmarks'||virtual==='unfiled-bookmarks'&&(b.folderId??null)===null||virtual==='favourites'&&b.favourite||virtual===null&&at!==null&&(b.folderId??null)===at)&&
   (virtual==='bookmarks'||virtual==='favourites'||typeFilter!=='lists')&&searchFilter(b)&&(!duplicatesOnly||!!duplicateIndex?.info(b))).sort((a,b)=>(a.title||a.sourceTitle||'').localeCompare(b.title||b.sourceTitle||''));
+ selectableKeys=new Set([
+  ...folderItems.map(f=>'folder:'+f.id),
+  ...listItems.map(l=>'list:'+l.id),
+  ...bookmarkItems.map(b=>'bookmark:'+b.id)
+ ]);
  if(!virtual&&at!==null)folderItems.length&&folderRows(view,folderItems);
  else if(!virtual&&at===null)folderRows(view,folderItems);
  let unfiledCount=0;
