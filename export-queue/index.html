@@ -2696,7 +2696,7 @@ if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.se
  window.oiImportSavedHtml=importSavedHtml;
 })();
 
-</script><script data-ai-review-import src="./ai-review-import.js?v=8"></script><script data-ai-review-package src="./ai-review-package.js?v=3"></script><script data-export-queue src="./export-queue.js?v=3"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
+</script><script data-ai-review-import src="./ai-review-import.js?v=9"></script><script data-ai-review-package src="./ai-review-package.js?v=3"></script><script data-export-queue src="./export-queue.js?v=3"></script><script data-unified-data>/* Unified Organisation data layer. Everything is local; source conversations are never edited. */
 (()=>{
 'use strict';
 const app=window.oiArchive;
@@ -2991,7 +2991,7 @@ function optionsMenu(){
    body.append(button('Organise existing AI reviews',()=>{
     close();window.oiAIReviewImport.organiseExisting().then(result=>{
      render(true);
-     window.oiAlert('AI reviews organised',result.moved+' bookmarks moved into category folders; '+result.newFolders+' folders created; '+result.removedEmpty+' empty list folders removed.');
+     window.oiAlert('AI reviews organised',result.moved+' bookmarks grouped; '+result.newFolders+' folders created; '+result.removedEmpty+' empty list folders removed; '+result.renamed+' old review folders renamed.');
     }).catch(e=>window.oiAlert('AI review repair failed',e?.message||String(e)));
    }));
   }
