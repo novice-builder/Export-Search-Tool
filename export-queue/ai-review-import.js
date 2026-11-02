@@ -18,12 +18,14 @@ function reviewInstructions(){
  'This ZIP contains ChatGPT_Search_Evidence.json. Review its ORIGINAL messages, exact conversation IDs, and message IDs.',
  'First follow the review objective from the user conversation. If the user gave NO objective or instruction, ask what they want identified or organised BEFORE reviewing. Do not assume a topic.',
  'DEFAULT IS SELECTIVE: recommend lists only for conversations relevant to the requested objective. Bookmark significant, useful messages only. Do not categorise or bookmark everything just to fill an output. Empty lists and bookmarks arrays are allowed.',
- 'ONLY if the user explicitly requests comprehensive organisation, categorise all reviewed conversations in meaningful lists. Even then, do not create arbitrary bookmarks for every message.',
+ 'ONLY when conversation lists are requested, recommend them. If the user says no lists, return an empty lists array. Never invent lists merely because the review is comprehensive.',
+ 'Organise related bookmarks into a balanced hierarchy, usually around 5–20 per folder, but only when sensible: keep small distinct topics together, and split genuinely mixed large topics. Avoid 100 tiny folders and giant miscellaneous folders.',
+ 'Identify potential repeats or duplicates for user review, but never discard or merge source bookmarks automatically.',
  'Do not equate repeated discussion with independent corroboration, and do not invent findings. Preserve source wording and distinguish observations from interpretations in descriptions.',
  'Return ONE downloadable JSON with schema "'+SCHEMA+'" and arrays "lists" and "bookmarks" (empty arrays allowed), and optional "reviewLabel".',
  'Each list needs a short "label" and "conversationIds" array containing only EXACT source IDs. For each useful conversation, include an entry under "snippets": [{"conversationId":"EXACT_ID","messageId":"EXACT_ID","quote":"EXACT VERBATIM PASSAGE","reason":"Why this conversation is relevant to this particular list"}]. Include only relevant list-specific snippets.',
  'The quote MUST copy a meaningful passage from the MIDDLE of the actual message when that is where the useful evidence begins. NEVER default to the first words merely because they start the message. Choose enough exact original text to convey the point; do not paraphrase or add leading ellipses. A message can supply different snippets for different lists.',
- 'Each bookmark needs exact "conversationId" and "messageId", a concise "title", plus "quote" and "reason". The optional "group" (slash-separated categories) is kept as a suggestion for later organisation and does not create category folders by default. Bookmarks should identify useful source messages, not duplicate every list membership.',
+ 'Each bookmark needs exact "conversationId" and "messageId", a concise "title", plus "quote" and "reason". The "group" (slash-separated categories) creates actual bookmark folders inside the review, not labels in titles. Bookmarks should identify useful source messages, not duplicate every list membership.',
  'Write a short, specific "reason" for each selected list conversation and bookmark, ideally one sentence of about 12–35 words. Explain WHY this material matters to the requested review objective, not merely what the conversation title says. Ground reasons in the provided passage and distinguish AI interpretation from source evidence. Avoid generic praise and unsupported assumptions.',
  'Do NOT invent or alter IDs, guess quotations or turn conversation titles into IDs. If a quote cannot be verified verbatim, omit that snippet rather than inventing one.',
  'The importer will validate IDs and verbatim quotes against original messages and preserve manually edited snippets. Reply only with the JSON file, not prose outside the file.',
@@ -99,7 +101,7 @@ function chooseDestination(doc){
    count.textContent=doc.lists.length+' lists and '+doc.bookmarks.length+' bookmarks suggested'+(duplicates?' · '+duplicates+' source messages already bookmarked':'');
    form.append(count);
    const summary=document.createElement('p');summary.className='oi-review-hint';
-   summary.textContent='Each destination contains separate Conversation lists and Bookmarks folders. Existing bookmarks remain unchanged; copies will be marked.';
+   summary.textContent='Only populated sections are created. Bookmark groups become real folders. Existing copies remain available for review.';
    form.append(summary);
    const controls=document.createElement('div');controls.className='oi-review-controls';
    const cancel=document.createElement('button');cancel.type='button';cancel.textContent='Cancel';cancel.onclick=()=>{finish(null);close()};
@@ -107,7 +109,7 @@ function chooseDestination(doc){
    controls.append(cancel,importButton);form.append(controls);
    const sync=()=>{folderLabel.hidden=!existing.checked;selector.disabled=!existing.checked;
     nameLabel.textContent=existing.checked?'Review name (optional)':'Review / folder name (optional)';
-    hint.textContent=existing.checked?'Lists and bookmarks will be placed in their own subfolders within the selected folder.':'Creates a new folder inside AI Reviewed. If you leave the name blank, AI Review (or a numbered variation) is used.';};
+    hint.textContent=existing.checked?'Populated sections and bookmark categories will be placed in the selected folder.':'Creates a review inside AI Reviewed. Empty list sections are not created.';};
    fresh.onchange=existing.onchange=sync;sync();
    selector.onchange=()=>selector.setCustomValidity('');
    form.onsubmit=e=>{e.preventDefault();if(existing.checked&&!selector.value){selector.setCustomValidity('Select a folder');selector.reportValidity();return}
@@ -138,7 +140,7 @@ function reviewDestination(doc,choice,count){
   if(!target)target=create(label,review.id,{aiOrganised:true,aiReviewSection:label});
   return target.id;
  };
- return {reviewId:review.id,reviewName:review.name,listsId:ensure('Conversation lists'),bookmarksId:ensure('Bookmarks')};
+ return {reviewId:review.id,reviewName:review.name,listsId:doc.lists.length?ensure('Conversation lists'):null,bookmarksId:doc.bookmarks.length?ensure('Bookmarks'):null};
 }
 function apply(doc,choice){
  const all=new Map(app.entries.map(e=>[String(e.id),e]));
