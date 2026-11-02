@@ -2385,6 +2385,32 @@ window.oiBuildEvidenceExport=choice=>{
     panel.append(note,selector,name,details,save,finish);
    });
   };
+  const clearCache=document.createElement('button');clearCache.type='button';clearCache.textContent='Clear cache';
+  clearCache.setAttribute('aria-label','Clear offline app cache without deleting saved data');
+  clearCache.onclick=()=>{
+    close();
+    window.oiConfirm('Clear offline cache?',
+      'Removes Search Tool offline app files cached on this device. Saved conversations, bookmarks, folders, lists, imports and settings in local storage are not deleted. You will need an internet connection to reload the app and restore offline access. This does not clear the Safari browser cache.',
+      'Clear cache',async()=>{
+        try{
+          if(!window.caches?.keys||!window.caches?.delete)throw Error('Offline cache management is not supported in this browser.');
+          const names=await window.caches.keys();
+          const targets=names.filter(name=>name.startsWith('chatgpt-search-export-queue-pages-shell-'));
+          const results=await Promise.all(targets.map(name=>window.caches.delete(name)));
+          if(results.some(ok=>!ok))throw Error('Some offline files could not be cleared. Try again.');
+          window.oiDialog('Cache cleared',(panel,finish)=>{
+            const note=document.createElement('p');
+            note.textContent=targets.length?('Removed '+targets.length+' Search Tool offline cache '+(targets.length===1?'version':'versions')+'. Saved data is unchanged. Reload while connected to the internet to fetch current app files.'):
+              'No Search Tool offline cache files were found. Saved data is unchanged.';
+            const controls=document.createElement('div');controls.className='oi-file-name-actions';
+            const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=finish;
+            const reload=document.createElement('button');reload.type='button';reload.textContent='Reload app';reload.className='primary';
+            reload.onclick=()=>{finish();window.location.reload()};
+            controls.append(done,reload);panel.append(note,controls);
+          });
+        }catch(error){window.oiAlert('Could not clear cache',error?.message||String(error))}
+      });
+  };
   const clear=document.createElement('button');clear.type='button';clear.className='oi-clear-data';clear.textContent='Clear all app data';
   clear.onclick=()=>{
    close();window.oiConfirm('Clear all app data?','This deletes locally saved conversations, bookmarks, folders, lists, saved searches and import progress in this installation. The action cannot be undone. Your original ZIP or saved HTML files will not be deleted.','Clear all data',()=>{
@@ -2392,7 +2418,7 @@ window.oiBuildEvidenceExport=choice=>{
    });
   };
   const done=document.createElement('button');done.type='button';done.textContent='Close';done.onclick=close;
-  main.append(filenameButton,projectButton,clear,done,storageRow);body.append(main);
+  main.append(filenameButton,projectButton,clearCache,clear,done,storageRow);body.append(main);
  }));
 })();
 </script><script data-local-persistence>
