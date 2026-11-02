@@ -7,7 +7,6 @@ const picker=document.createElement('input');picker.type='file';picker.accept='.
 let busy=false;
 const clean=(v,max=100)=>typeof v==='string'?v.replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max):'';
 const getId=v=>typeof v==='string'&&v.length<=512?v.trim():'';
-const aiLabel=v=>/^AI\s*[-–—:]\s*/i.test(v)?v:'AI - '+v;
 const name=(v,fallback)=>clean(v,95)||fallback;
 const same=(a,b)=>String(a).toLowerCase()===String(b).toLowerCase();
 const key=()=> 'research-'+Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16)).join('-');
@@ -19,7 +18,7 @@ function reviewInstructions(){
  'First follow the review objective from the user conversation. If the user gave NO objective or instruction, ask what they want identified or organised BEFORE reviewing. Do not assume a topic.',
  'DEFAULT IS SELECTIVE: recommend lists only for conversations relevant to the requested objective. Bookmark significant, useful messages only. Do not categorise or bookmark everything just to fill an output. Empty lists and bookmarks arrays are allowed.',
  'ONLY when conversation lists are requested, recommend them. If the user says no lists, return an empty lists array. Never invent lists merely because the review is comprehensive.',
- 'Organise related bookmarks into a balanced hierarchy, usually around 5–20 per folder, but only when sensible: keep small distinct topics together, and split genuinely mixed large topics. Avoid 100 tiny folders and giant miscellaneous folders.',
+ 'Organise related bookmarks into a balanced hierarchy, usually around 5–20 per folder when sensible. Keep small distinct topics together and split genuinely mixed large topics; avoid excessive tiny folders and giant catch-all folders. Use short, recognisable category names, ideally 1–4 words (for example, "NDIS Funding" or "Home Repairs"), not long descriptive phrases or prefixes like "AI -".',
  'Identify potential repeats or duplicates for user review, but never discard or merge source bookmarks automatically.',
  'Do not equate repeated discussion with independent corroboration, and do not invent findings. Preserve source wording and distinguish observations from interpretations in descriptions.',
  'Return ONE downloadable JSON with schema "'+SCHEMA+'" and arrays "lists" and "bookmarks" (empty arrays allowed), and optional "reviewLabel".',
@@ -70,12 +69,12 @@ function chooseDestination(doc){
    body.classList.add('oi-review-import');
    const form=document.createElement('form'),input=document.createElement('input');
    const nameLabel=document.createElement('label');
-   nameLabel.htmlFor='oi-review-folder-name';nameLabel.textContent='Review / folder name (optional)';
-   input.id='oi-review-folder-name';input.type='text';input.maxLength=95;input.value='';input.placeholder='Review';
+   nameLabel.htmlFor='oi-review-folder-name';nameLabel.textContent='Folder name (optional)';
+   input.id='oi-review-folder-name';input.type='text';input.maxLength=95;input.value='';input.placeholder='Review (default)';
    const nameControl=document.createElement('div');nameControl.className='oi-review-name-control';
    const clearName=document.createElement('button');clearName.type='button';
    clearName.className='oi-review-name-clear';clearName.textContent='×';
-   clearName.setAttribute('aria-label','Clear suggested review name');clearName.title='Clear name';
+   clearName.setAttribute('aria-label','Clear folder name');clearName.title='Clear name';
    const syncNameClear=()=>{clearName.hidden=!input.value.length};
    clearName.onclick=()=>{input.value='';syncNameClear();input.focus({preventScroll:true})};
    input.addEventListener('input',syncNameClear);
@@ -108,7 +107,7 @@ function chooseDestination(doc){
    const importButton=document.createElement('button');importButton.type='submit';importButton.textContent='Import review';
    controls.append(cancel,importButton);form.append(controls);
    const sync=()=>{folderLabel.hidden=!existing.checked;selector.disabled=!existing.checked;
-    nameLabel.textContent=existing.checked?'Review name (optional)':'Review / folder name (optional)';
+    nameLabel.textContent='Folder name (optional)';
     hint.textContent=existing.checked?'Populated sections and bookmark categories will be placed in the selected folder.':'Creates a review inside AI Reviewed. Empty list sections are not created.';};
    fresh.onchange=existing.onchange=sync;sync();
    selector.onchange=()=>selector.setCustomValidity('');
@@ -142,8 +141,31 @@ function reviewDestination(doc,choice,count){
  };
  return {reviewId:review.id,reviewName:review.name,listsId:doc.lists.length?ensure('Conversation lists'):null,bookmarksId:doc.bookmarks.length?ensure('Bookmarks'):null};
 }
+function compactCategory(raw){
+ // Preserve the original AI group text in bookmark metadata for traceability.
+ // Only the displayed AI-created folder name is simplified.
+ const original=clean(raw,120).replace(/^AI\s*[-–—:]\s*/i,'');
+ const known={
+  'ben - care, behaviour & observations':'Ben - Care & Behaviour',
+  'computers & storage - troubleshooting':'Computers & Storage',
+  'ndis - funding, workers & investigation':'NDIS Funding',
+  'personal health & medication':'Health & Medication',
+  'block world - building & maps':'Block World',
+  'support work - rosters & administration':'Support Rosters',
+  'ai projects - testing & recovery':'AI Projects',
+  'search tool - development & issues':'Search Tool',
+  'home, property & equipment repairs':'Home & Repairs',
+  'software, spreadsheets & smart home':'Software & Smart Home'
+ };
+ const key=original.toLocaleLowerCase();
+ if(known[key])return known[key];
+ return original
+  .replace(/\s*[-–—]\s*(?:troubleshooting|testing\s*&\s*recovery|development\s*&\s*issues)$/i,'')
+  .replace(/\s*&\s*observations$/i,'')
+  .trim()||'Other';
+}
 function resolveGroupFolder(parentId,rawGroup,count){
- const parts=String(rawGroup||'').split('/').map(p=>clean(p,70)).filter(p=>p&&p!=='.'&&p!=='..').slice(0,4);
+ const parts=String(rawGroup||'').split('/').map(compactCategory).filter(p=>p&&p!=='.'&&p!=='..').slice(0,4);
  if(!parts.length)parts.push('Other');
  let current=parentId;
  for(const label of parts){
