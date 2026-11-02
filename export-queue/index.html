@@ -2429,8 +2429,9 @@ const app=window.oiArchive;
 if(!app)return;
 const DB_NAME='ChatGPTSearchTool-ExportQueue-Pages-v1';
 const DB_VERSION=1;
-let databasePromise;
+let databasePromise,connectedDB=null;
 let ready=false,activeImport=false,restoring=true,savingMeta=false,metaTimer=0;
+let metaRevision=0,savedRevision=0,saveRetries=0,saveFailed=false;
 let cachedMeta={imports:[],research:{},workspace:null,progress:null,accent:'blue'};
 const status=document.createElement('span');
 status.id='oi-device-storage-status';status.setAttribute('role','status');status.setAttribute('aria-live','polite');
@@ -2452,56 +2453,113 @@ const show=(message,error=false,{persistent=false}={})=>{
   status.style.display='none';status.hidden=true;
  },4000);
 };
+function invalidateDB(db){
+ if(db&&connectedDB!==db)return;
+ try{db?.close()}catch(_){}
+ connectedDB=null;databasePromise=null;
+}
 function openDB(){
- if(!databasePromise)databasePromise=new Promise((resolve,reject)=>{
-  if(!window.indexedDB){reject(Error('IndexedDB unavailable'));return}
-  const request=indexedDB.open(DB_NAME,DB_VERSION);
-  request.onupgradeneeded=()=>{
-   const db=request.result;
-   if(!db.objectStoreNames.contains('conversations'))db.createObjectStore('conversations',{keyPath:'id'});
-   if(!db.objectStoreNames.contains('meta'))db.createObjectStore('meta');
-  };
-  request.onsuccess=()=>resolve(request.result);
-  request.onerror=()=>reject(request.error||Error('Cannot open local device storage'));
-  request.onblocked=()=>reject(Error('Device storage is open in another tab'));
- }).catch(e=>{databasePromise=null;throw e});
+ if(!databasePromise){
+  let pending;
+  pending=new Promise((resolve,reject)=>{
+   if(!window.indexedDB){reject(Error('IndexedDB unavailable'));return}
+   const request=indexedDB.open(DB_NAME,DB_VERSION);
+   request.onupgradeneeded=()=>{
+    const db=request.result;
+    if(!db.objectStoreNames.contains('conversations'))db.createObjectStore('conversations',{keyPath:'id'});
+    if(!db.objectStoreNames.contains('meta'))db.createObjectStore('meta');
+   };
+   request.onsuccess=()=>{
+    const db=request.result;connectedDB=db;
+    db.onversionchange=()=>invalidateDB(db);
+    db.addEventListener?.('close',()=>{
+     // Safari can close an IndexedDB connection when the app is suspended.
+     // Never reuse a closed connection for a later filter/autosave update.
+     if(connectedDB===db){connectedDB=null;databasePromise=null}
+    });
+    resolve(db);
+   };
+   request.onerror=()=>reject(request.error||Error('Cannot open local device storage'));
+   request.onblocked=()=>reject(Error('Device storage is open in another tab'));
+  }).catch(error=>{
+   if(databasePromise===pending)databasePromise=null;
+   throw error;
+  });
+  databasePromise=pending;
+ }
  return databasePromise;
 }
-async function getMeta(){const db=await openDB();return new Promise((resolve,reject)=>{
+async function withDB(operation){
+ for(let attempt=0;attempt<2;attempt++){
+  const db=await openDB();
+  try{return await operation(db)}
+  catch(error){
+   // InvalidStateError here typically means a previously opened IDBDatabase
+   // is no longer usable. Reopen once, preserving all local records.
+   if(error?.name!=='InvalidStateError'||attempt)throw error;
+   invalidateDB(db);
+  }
+ }
+}
+async function getMeta(){return withDB(db=>new Promise((resolve,reject)=>{
  const tx=db.transaction('meta','readonly'),r=tx.objectStore('meta').get('workspace');
  r.onsuccess=()=>resolve(r.result||null);r.onerror=()=>reject(r.error||Error('Cannot read workspace'));
-});}
-async function putMeta(obj){const db=await openDB();return new Promise((resolve,reject)=>{
+ tx.onabort=()=>reject(tx.error||Error('Workspace read aborted'));
+}));}
+async function putMeta(obj){return withDB(db=>new Promise((resolve,reject)=>{
  const tx=db.transaction('meta','readwrite');tx.objectStore('meta').put(obj,'workspace');
  tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||Error('Workspace save aborted'));tx.onerror=()=>reject(tx.error||Error('Workspace save failed'));
-});}
-async function putBatch(entries){const db=await openDB();return new Promise((resolve,reject)=>{
+}));}
+async function putBatch(entries){return withDB(db=>new Promise((resolve,reject)=>{
  const tx=db.transaction('conversations','readwrite'),store=tx.objectStore('conversations');
  for(const entry of entries)store.put(entry);
  tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||Error('Conversation batch save aborted'));tx.onerror=()=>reject(tx.error||Error('Conversation batch save failed'));
-});}
-async function readConversations(){const db=await openDB();return new Promise((resolve,reject)=>{
+}));}
+async function readConversations(){return withDB(db=>new Promise((resolve,reject)=>{
  const entries=[],tx=db.transaction('conversations','readonly'),r=tx.objectStore('conversations').openCursor();
  r.onsuccess=()=>{const c=r.result;if(c){entries.push(c.value);if(entries.length%250===0)show('restoring '+entries.length.toLocaleString()+' conversations…',false,{persistent:true});c.continue()}else resolve(entries)};
- r.onerror=()=>reject(r.error||Error('Cannot restore conversations'));tx.onerror=()=>reject(tx.error||Error('Conversation restoration failed'));
-});}
-async function removeAll(){const db=await openDB();return new Promise((resolve,reject)=>{
+ r.onerror=()=>reject(r.error||Error('Cannot restore conversations'));tx.onabort=()=>reject(tx.error||Error('Conversation restoration failed'));
+}));}
+async function removeAll(){return withDB(db=>new Promise((resolve,reject)=>{
  const tx=db.transaction(['conversations','meta'],'readwrite');
  tx.objectStore('conversations').clear();tx.objectStore('meta').clear();
  tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||Error('Reset failed'));tx.onerror=()=>reject(tx.error||Error('Reset failed'));
-});}
+}));}
 function captureMeta(){return {
  imports:app.imports.slice(),research:structuredClone(app.research),workspace:app.captureWorkspace(),
  progress:cachedMeta.progress||null,accent:app.accent,savedAt:Date.now()
 }}
-async function saveMetadata(){if(!ready||activeImport||restoring)return;
- if(savingMeta)return;
- savingMeta=true;try{const m=captureMeta();await putMeta(m);cachedMeta=m;latestStorageStatus='Local storage: ready · '+app.entries.length.toLocaleString()+' conversations saved on this device'}
- catch(e){show('SAVE FAILED — '+(e?.name||'storage error'),true);console.error(e)}finally{savingMeta=false}
+async function saveMetadata(){
+ if(!ready||activeImport||restoring||savingMeta)return;
+ savingMeta=true;
+ try{
+  while(ready&&!activeImport&&!restoring&&savedRevision<metaRevision){
+   const revision=metaRevision,m=captureMeta();
+   await putMeta(m);
+   cachedMeta=m;savedRevision=revision;saveRetries=0;
+   if(saveFailed){
+    saveFailed=false;
+    show('save recovered · '+app.entries.length.toLocaleString()+' conversations retained on this device');
+   }else{
+    latestStorageStatus='Local storage: ready · '+app.entries.length.toLocaleString()+' conversations saved on this device';
+   }
+  }
+ }catch(e){
+  saveFailed=true;
+  console.error('Search Tool local metadata autosave failed:',e);
+  show('SAVE FAILED — '+(e?.name||'storage error')+' · changes may be unsaved',true,{persistent:true});
+  // Do not discard pending changes. Retry a few times, then retain the warning
+  // until the next user change or a successful explicit save.
+  if(++saveRetries<=3){
+   clearTimeout(metaTimer);
+   metaTimer=setTimeout(()=>{void saveMetadata()},2500*saveRetries);
+  }
+ }finally{savingMeta=false}
 }
-function scheduleMeta(){if(!ready||activeImport||restoring)return;
- clearTimeout(metaTimer);
- metaTimer=setTimeout(saveMetadata,800);
+function scheduleMeta(){
+ if(!ready||activeImport||restoring)return;
+ metaRevision++;saveRetries=0;clearTimeout(metaTimer);
+ metaTimer=setTimeout(()=>{void saveMetadata()},800);
 }
 window.addEventListener('oi-research-change',scheduleMeta);
 // Import stores its own batches. Ordinary archive change events never reserialize the whole archive.
