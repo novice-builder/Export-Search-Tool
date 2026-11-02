@@ -139,7 +139,11 @@ function reviewDestination(doc,choice,count){
   if(!target)target=create(label,review.id,{aiOrganised:true,aiReviewSection:label});
   return target.id;
  };
- return {reviewId:review.id,reviewName:review.name,listsId:doc.lists.length?ensure('Conversation lists'):null,bookmarksId:doc.bookmarks.length?ensure('Bookmarks'):null};
+ return {
+  reviewId:review.id,reviewName:review.name,
+  listsId:doc.lists.length?(review.aiReviewFlatLists?review.id:ensure('Conversation lists')):null,
+  bookmarksId:doc.bookmarks.length?(review.aiReviewFlatBookmarks?review.id:ensure('Bookmarks')):null
+ };
 }
 function compactCategory(raw){
  // Preserve the original AI group text in bookmark metadata for traceability.
