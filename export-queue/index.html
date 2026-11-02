@@ -3121,6 +3121,7 @@ function selectionBar(root){
   bar.append(button('★',()=>{api.favourite([...selected],true);selected.clear();render(true)},'oi-org-star'));
   bar.append(button('☆',()=>{api.favourite([...selected],false);selected.clear();render(true)},'oi-org-star'));
  }
+ if(folders.length===1&&items.length===1)bar.append(button('Flatten folder',()=>confirmFlatten(folders[0].id)));
  if(lists.length>=2)bar.append(button('Merge lists',()=>chooseListMerge(lists)));
  if(folders.length>=2)bar.append(button('Merge folders',()=>chooseFolderMerge(folders)));
  bar.append(button('Delete',()=>bulkDelete(),'oi-org-danger'));
@@ -3130,6 +3131,22 @@ function announce(msg){const feedback=view.querySelector('.oi-org-feedback');if(
 function changeName(item){
  window.oiNameDialog('Rename '+item.type,item.type==='folder'?'Folder name':'List name',item.obj.name,value=>{
   if(item.type==='folder')svc.renameFolder(item.id,value);else api.renameList(item.id,value);render(true);
+ });
+}
+function confirmFlatten(id){
+ const folder=api.folder(id);if(!folder)return;
+ const childFolders=s().folders.filter(x=>x.parentId===id).length;
+ const childLists=s().lists.filter(x=>x.folderId===id).length;
+ const childBookmarks=s().bookmarks.filter(x=>x.folderId===id).length;
+ const destinationName=folder.parentId===null?'All folders':api.folder(folder.parentId)?.name||'parent folder';
+ const description='Move '+childFolders+' subfolders, '+childLists+' lists and '+childBookmarks+' bookmarks from “'+folder.name+'” into “'+destinationName+'”, then remove only the empty “'+folder.name+'” folder. All nested items and original conversations remain. Conflicting folder names may be numbered. This action can be undone.';
+ window.oiConfirm('Flatten “'+folder.name+'”?',description,'Flatten folder',()=>{
+  try{
+   const result=api.flattenFolder(id);
+   if(at===id)at=result.parent;
+   selected.clear();render(true);
+   announce('Flattened folder · '+(result.folders+result.lists+result.bookmarks)+' items moved · Undo available');
+  }catch(err){window.oiAlert('Could not flatten folder',err?.message||String(err))}
  });
 }
 function folderActions(record){
@@ -3145,6 +3162,7 @@ function folderActions(record){
    }));
   }
   body.append(button('Rename',()=>{close();changeName({type:'folder',id:folder.id,obj:folder})}));
+  body.append(button('Flatten folder',()=>{close();confirmFlatten(folder.id)}));
   body.append(button('Move to folder',()=>{close();destination('Move folder',(target)=>{api.move(['folder:'+folder.id],target);render(true)})}));
   body.append(button('Merge into another folder',()=>{close();destination('Merge folder into',(target)=>{
    if(target===null)throw Error('Choose a real destination folder');
