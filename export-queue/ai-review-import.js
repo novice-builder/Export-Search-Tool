@@ -8,7 +8,7 @@ let busy=false;
 const clean=(v,max=100)=>typeof v==='string'?v.replace(/[\u0000-\u001f\u007f]/g,' ').replace(/\s+/g,' ').trim().slice(0,max):'';
 const getId=v=>typeof v==='string'&&v.length<=512?v.trim():'';
 const aiLabel=v=>/^AI\s*[-–—:]\s*/i.test(v)?v:'AI - '+v;
-const name=(v,fallback)=>aiLabel(clean(v,95)||fallback);
+const name=(v,fallback)=>clean(v,95)||fallback;
 const same=(a,b)=>String(a).toLowerCase()===String(b).toLowerCase();
 const key=()=> 'research-'+Array.from(crypto.getRandomValues(new Uint32Array(4)),n=>n.toString(16)).join('-');
 const template={schema:SCHEMA,reviewLabel:'Example review',lists:[{label:'Funding concerns',conversationIds:['EXACT_CONVERSATION_ID'],snippets:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',quote:'EXACT RELEVANT WORDS FROM INSIDE THE ORIGINAL MESSAGE',reason:'Short explanation of why this passage is relevant to the review objective'}]}],bookmarks:[{conversationId:'EXACT_CONVERSATION_ID',messageId:'EXACT_MESSAGE_ID',title:'Important funding discrepancy',group:'Funding/Discrepancies',quote:'EXACT RELEVANT WORDS FROM THE SOURCE MESSAGE',reason:'Short explanation of why this bookmark matters'}]};
@@ -71,7 +71,7 @@ function chooseDestination(doc){
    const form=document.createElement('form'),input=document.createElement('input');
    const nameLabel=document.createElement('label');
    nameLabel.htmlFor='oi-review-folder-name';nameLabel.textContent='Review / folder name (optional)';
-   input.id='oi-review-folder-name';input.type='text';input.maxLength=95;input.value=doc.reviewLabel||'';input.placeholder='AI Review';
+   input.id='oi-review-folder-name';input.type='text';input.maxLength=95;input.value='';input.placeholder='Review';
    const nameControl=document.createElement('div');nameControl.className='oi-review-name-control';
    const clearName=document.createElement('button');clearName.type='button';
    clearName.className='oi-review-name-clear';clearName.textContent='×';
@@ -131,7 +131,7 @@ function reviewDestination(doc,choice,count){
  }else{
   let root=research.folders.find(f=>f.parentId===null&&(eq(f.name,'AI Reviewed')||eq(f.name,'AI Reviews')));
   if(!root)root=create('AI Reviewed',null,{aiOrganised:true});
-  const base=choice.name||'AI Review';let title=base,i=2;
+  const base=choice.name||'Review';let title=base,i=2;
   while(research.folders.some(f=>f.parentId===root.id&&eq(f.name,title)))title=base+' '+i++;
   review=create(title,root.id,{aiOrganised:true,aiReviewSource:doc.reviewLabel||title});
  }
@@ -141,6 +141,23 @@ function reviewDestination(doc,choice,count){
   return target.id;
  };
  return {reviewId:review.id,reviewName:review.name,listsId:doc.lists.length?ensure('Conversation lists'):null,bookmarksId:doc.bookmarks.length?ensure('Bookmarks'):null};
+}
+function resolveGroupFolder(parentId,rawGroup,count){
+ const parts=String(rawGroup||'').split('/').map(p=>clean(p,70)).filter(p=>p&&p!=='.'&&p!=='..').slice(0,4);
+ if(!parts.length)parts.push('Other');
+ let current=parentId;
+ for(const label of parts){
+  const siblings=app.research.folders.filter(f=>f.parentId===current);
+  let folder=siblings.find(f=>same(f.name,label));
+  if(!folder){
+   let value=label,n=2;
+   while(siblings.some(f=>same(f.name,value)))value=label+' '+n++;
+   folder={id:key(),name:value,parentId:current,aiOrganised:true,aiReviewCategory:true};
+   app.research.folders.push(folder);count.newFolders++;
+  }
+  current=folder.id;
+ }
+ return current;
 }
 function apply(doc,choice){
  const all=new Map(app.entries.map(e=>[String(e.id),e]));
@@ -227,8 +244,9 @@ function apply(doc,choice){
   // Reimports reuse the same review's exact bookmark, preserving any manual edits.
   if(previouslyInReview){count.existingBookmarks++;continue}
   const duplicate=matches.some(b=>spanId(b.snippet)===spanId(excerpt));
+  const categoryId=resolveGroupFolder(destination.bookmarksId,item.group||item.folder||'',count);
   research.bookmarks.push({
-   id:key(),conversationId:cid,messageId:mid,folderId:destination.bookmarksId,favourite:false,
+   id:key(),conversationId:cid,messageId:mid,folderId:categoryId,favourite:false,
    title:name(item.title||item.label,'Message from '+clean(conv.title,55)),
    description:clean(item.reason||item.description||item.note||'',350),
    sourceTitle:conv.title,snippet:excerpt,originalSnippet:structuredClone(excerpt),
@@ -256,7 +274,7 @@ async function load(file){
    await storage.persistAIReview();app.changed();
   }
   const message=[
-   'Destination: '+totals.reviewName+' / Conversation lists + Bookmarks',
+   'Destination: '+totals.reviewName+' / '+(data.lists.length?'Conversation lists + ':'')+(data.bookmarks.length?'Grouped bookmarks':'Conversation lists'),
    totals.newLists+' lists created; '+totals.updatedLists+' matching lists updated',
    totals.addedMembers+' conversation assignments added; '+totals.newSnippets+' verified source passages; '+totals.updatedReasons+' explanations refreshed',
    totals.newBookmarks+' bookmarks added; '+totals.newFolders+' folders created',
@@ -275,5 +293,30 @@ async function load(file){
  }finally{busy=false}
 }
 picker.addEventListener('change',()=>{const file=picker.files?.[0];picker.value='';if(file)void load(file)});
-window.oiAIReviewImport={choose,copyInstructions,template,instructions:reviewInstructions};
+async function organiseExisting(){
+ if(busy)throw Error('Another AI import is in progress');
+ const prior=structuredClone(app.research),count={newFolders:0,moved:0,removedEmpty:0};
+ const find=id=>app.research.folders.find(f=>f.id===id);
+ try{
+  for(const b of app.research.bookmarks){
+   if(b.aiReview?.schema!==SCHEMA||!b.aiReview.reviewFolderId)continue;
+   const review=find(b.aiReview.reviewFolderId);if(!review)continue;
+   const generic=app.research.folders.find(f=>f.parentId===review.id&&same(f.name,'Bookmarks'));
+   if(!generic||b.folderId!==generic.id)continue;
+   b.folderId=resolveGroupFolder(generic.id,b.aiReview.suggestedGroup||'',count);count.moved++;
+  }
+  for(const section of [...app.research.folders]){
+   if(section.aiReviewSection!=='Conversation lists'||!section.aiOrganised)continue;
+   if(app.research.lists.some(l=>l.folderId===section.id))continue;
+   if(app.research.bookmarks.some(b=>b.folderId===section.id))continue;
+   if(app.research.folders.some(f=>f.parentId===section.id))continue;
+   app.research.folders=app.research.folders.filter(f=>f.id!==section.id);count.removedEmpty++;
+  }
+  if(count.newFolders||count.moved||count.removedEmpty){
+   await window.oiPwaTest?.persistAIReview?.();app.changed();
+  }
+  return count;
+ }catch(e){for(const kind of ['lists','bookmarks','folders'])app.research[kind]=prior[kind];app.changed();throw e}
+}
+window.oiAIReviewImport={choose,copyInstructions,template,instructions:reviewInstructions,organiseExisting};
 })();
