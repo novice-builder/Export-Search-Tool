@@ -2712,7 +2712,7 @@ const unique=(base,existing)=>{let s=clean(base)||'Untitled',i=2;while(existing.
 const siblings=(parent,skip)=>data().folders.filter(f=>f.parentId===parent&&f.id!==skip).map(f=>f.name);
 let undoRecord=null;
 function snapshot(){return {research:structuredClone(data()),filters:structuredClone(app.listFilter)}}
-function restore(s){for(const key of ['lists','bookmarks','folders'])data()[key]=structuredClone(s.research[key]);Object.assign(app.listFilter,structuredClone(s.filters));app.changed()}
+function restore(s){for(const key of ['lists','bookmarks','folders','quickAccessFolderIds','exportQueue','exportQueueExcluded']){if(s.research[key]===undefined)delete data()[key];else data()[key]=structuredClone(s.research[key])}Object.assign(app.listFilter,structuredClone(s.filters));app.changed()}
 function remember(name,old){undoRecord={name,snapshot:old}}
 function undo(){if(!undoRecord)return false;const record=undoRecord;undoRecord=null;restore(record.snapshot);return record.name}
 function canMoveFolder(id,target){
@@ -2874,11 +2874,42 @@ function mergeFolders(ids,targetId){
  remember('Merge folders',old);app.changed();
  return {merged:top.length,movedLists,movedBookmarks,movedSubfolders};
 }
+function flattenFolder(id){
+ const source=folder(id);if(!source)throw Error('Folder no longer exists');
+ const parent=source.parentId??null;
+ if(parent!==null&&!folder(parent))throw Error('Parent folder is unavailable');
+ const children=data().folders.filter(f=>f.parentId===id);
+ const lists=data().lists.filter(l=>l.folderId===id);
+ const bookmarks=data().bookmarks.filter(b=>b.folderId===id);
+ const old=snapshot(),sourceKey='folder:'+id;
+ // Preserve Export Queue selection and exclusions when an intermediate folder disappears.
+ const queued=Array.isArray(data().exportQueue)?[...data().exportQueue]:[];
+ const excluded=Array.isArray(data().exportQueueExcluded)?[...data().exportQueueExcluded]:[];
+ const childKeys=[...children.map(x=>'folder:'+x.id),...lists.map(x=>'list:'+x.id),...bookmarks.map(x=>'bookmark:'+x.id)];
+ if(queued.includes(sourceKey)){
+  for(const key of childKeys)if(!excluded.includes(key)&&!queued.includes(key))queued.push(key);
+ }
+ if(excluded.includes(sourceKey)){
+  for(const key of childKeys)if(!queued.includes(key)&&!excluded.includes(key))excluded.push(key);
+ }
+ data().exportQueue=queued.filter(x=>x!==sourceKey);
+ data().exportQueueExcluded=excluded.filter(x=>x!==sourceKey);
+ for(const child of children){
+  child.name=unique(child.name,siblings(parent,child.id));child.parentId=parent;
+ }
+ for(const item of lists)item.folderId=parent;
+ for(const item of bookmarks)item.folderId=parent;
+ data().folders=data().folders.filter(f=>f.id!==id);
+ if(Array.isArray(data().quickAccessFolderIds))data().quickAccessFolderIds=data().quickAccessFolderIds.filter(x=>x!==id);
+ // Do not touch source conversations, IDs, excerpts, notes, or nested child contents.
+ remember('Flatten folder',old);app.changed();
+ return {parent,folders:children.length,lists:lists.length,bookmarks:bookmarks.length};
+}
 function renameList(id,value){const item=list(id);if(!item||!clean(value))return false;const old=snapshot();item.name=unique(clean(value),data().lists.filter(x=>x.id!==id).map(x=>x.name));remember('Rename list',old);app.changed();return true}
 function setListFolder(id,target){return move(['list:'+id],target)}
 function setBookmarkFolder(id,target){return move(['bookmark:'+id],target)}
 function counts(){return {folders:data().folders.length,lists:data().lists.length,bookmarks:data().bookmarks.length,favourites:data().lists.filter(x=>x.favourite).length+data().bookmarks.filter(x=>x.favourite).length}}
-window.oiUnifiedData={folder,list,bookmark,createFolder,reviewFolder,organiseExistingAILists,createFolderWithItems,selectedItems,canMoveFolder,move,favourite,summariseDelete,remove,mergeLists,mergeFolders,renameList,setListFolder,setBookmarkFolder,undo,counts,get canUndo(){return !!undoRecord},get undoLabel(){return undoRecord?.name||null}};
+window.oiUnifiedData={folder,list,bookmark,createFolder,reviewFolder,organiseExistingAILists,createFolderWithItems,selectedItems,canMoveFolder,move,favourite,summariseDelete,remove,mergeLists,mergeFolders,flattenFolder,renameList,setListFolder,setBookmarkFolder,undo,counts,get canUndo(){return !!undoRecord},get undoLabel(){return undoRecord?.name||null}};
 })();</script><script data-unified-ui>/* One folder-first Organisation explorer shared by conversation lists and bookmarks. */
 (()=>{
 'use strict';
