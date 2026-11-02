@@ -2890,6 +2890,14 @@ const button=(label,action,cls)=>{const n=el('button',cls||'',label);n.type='but
 const nice=n=>Number(n).toLocaleString();
 let at=null,virtual=null,query='',typeFilter='all',selecting=false,shown=new Set(),selected=new Set(),limit=80,loaded=false,quickAccessOpen=false,duplicatesOnly=false;
 const s=()=>app.research;
+function pinnedFolderIds(){return Array.isArray(s().quickAccessFolderIds)?s().quickAccessFolderIds.filter(id=>api.folder(id)):[]}
+function isPinnedFolder(id){return pinnedFolderIds().includes(id)}
+function togglePinnedFolder(id){
+ if(!api.folder(id))return;
+ const ids=pinnedFolderIds();
+ s().quickAccessFolderIds=ids.includes(id)?ids.filter(x=>x!==id):[...ids,id];
+ app.changed();
+}
 const isChosen=(type,id)=>selected.has(type+':'+id);
 function changedSelection(type,id,checked){
  const k=type+':'+id;if(checked)selected.add(k);else selected.delete(k);render(true);
@@ -2979,6 +2987,14 @@ function optionsMenu(){
   body.append(button((duplicatesOnly?'✓ ':'')+'Show duplicates only ('+duplicateCount+')',()=>{
    close();duplicatesOnly=!duplicatesOnly;render(true);
   }));
+  if(window.oiAIReviewImport?.organiseExisting){
+   body.append(button('Organise existing AI reviews',()=>{
+    close();window.oiAIReviewImport.organiseExisting().then(result=>{
+     render(true);
+     window.oiAlert('AI reviews organised',result.moved+' bookmarks moved into category folders; '+result.newFolders+' folders created; '+result.removedEmpty+' empty list folders removed.');
+    }).catch(e=>window.oiAlert('AI review repair failed',e?.message||String(e)));
+   }));
+  }
   if(api.canUndo){
    body.append(button('Undo last change'+(api.undoLabel?' — '+api.undoLabel:''),()=>{
     close();api.undo();selected.clear();render(true);
@@ -2997,7 +3013,7 @@ function pathTools(root){
  };
  if(virtual!==null){
   addCrumb('All folders',()=>orgFolder(null),false);
-  addCrumb(({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites','export-queue':'Export Queue'}[virtual]||'Organisation'),null,true);
+  addCrumb(({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites','unfiled-bookmarks':'Unfiled Bookmarks','unfiled-lists':'Unfiled Lists','export-queue':'Export Queue'}[virtual]||'Organisation'),null,true);
  }else{
   if(at===null)addCrumb('All folders',null,true);
   else{
@@ -3028,6 +3044,10 @@ function quickAccess(root){
   entryRow(items,'list','All conversation lists',nice(c.lists)+' lists',()=>orgVirtual('lists'));
   entryRow(items,'☆','Favourites',nice(c.favourites)+' starred items',()=>orgVirtual('favourites'));
   entryRow(items,'◷','Saved searches & history',s().savedSearches.length+' saved searches',()=>window.oiOpenLibrary('searches'));
+  for(const id of pinnedFolderIds()){
+   const f=api.folder(id);if(!f)continue;
+   entryRow(items,'folder',f.name,'Pinned folder',()=>orgFolder(id),{type:'folder',id,more:()=>folderActions(f)});
+  }
   host.append(items);
  }
  root.append(host);
@@ -3062,7 +3082,9 @@ function folderActions(record){
  const folder=record;
  window.oiDialog(folder.name,(body,close)=>{
   body.classList.add('action-menu');
-  body.append(button('Open folder',()=>{close();orgFolder(folder.id)}));if(window.oiExportQueue){
+  body.append(button('Open folder',()=>{close();orgFolder(folder.id)}));
+  body.append(button(isPinnedFolder(folder.id)?'Remove from Quick access':'Add to Quick access',()=>{close();togglePinnedFolder(folder.id);render(true)}));
+  if(window.oiExportQueue){
    const q=window.oiExportQueue,st=q.status('folder',folder.id),k='folder:'+folder.id;
    body.append(button(st==='excluded'?'Include in Export Queue':st?'Remove from Export Queue':'Add to Export Queue',()=>{
     close();if(st==='excluded'||!st)q.add([k]);else q.exclude([k]);render(true);
@@ -3298,7 +3320,7 @@ function render(keepScroll=false){
  const previous=at!==null?'parent folder':virtual!==null?'all folders':'previous screen';
  const backButton=button('← Back',back,'oi-org-back');backButton.setAttribute('aria-label','Back to '+previous);
  top.append(backButton);
- top.append(el('h1','',virtual?({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites','export-queue':'Export Queue'}[virtual]||'Organisation'):at!==null?(api.folder(at)?.name||'All folders'):'Organisation'));
+ top.append(el('h1','',virtual?({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites','unfiled-bookmarks':'Unfiled Bookmarks','unfiled-lists':'Unfiled Lists','export-queue':'Export Queue'}[virtual]||'Organisation'):at!==null?(api.folder(at)?.name||'All folders'):'Organisation'));
  const exitButton=button('×',()=>{if(window.oiBack)window.oiBack();else window.oiShowMainView()},'oi-org-exit');
  exitButton.setAttribute('aria-label','Close Organisation and return to previous screen');exitButton.title='Close Organisation';
  top.append(exitButton);
@@ -3313,16 +3335,29 @@ function render(keepScroll=false){
  const duplicateIndex=window.oiBookmarkDuplicateIndex?.();
  const folderItems=virtual===null?s().folders.filter(f=>f.parentId===at&&searchFilter(f)).sort((a,b)=>a.name.localeCompare(b.name)):[];
  const listItems=s().lists.filter(l=>
-  (virtual==='lists'||virtual==='favourites'&&l.favourite||virtual===null&&(l.folderId??null)===at)&&
+  (virtual==='lists'||virtual==='unfiled-lists'&&(l.folderId??null)===null||virtual==='favourites'&&l.favourite||virtual===null&&at!==null&&(l.folderId??null)===at)&&
   (virtual==='lists'||virtual==='favourites'||typeFilter!=='bookmarks')&&searchFilter(l)).sort((a,b)=>a.name.localeCompare(b.name));
  const bookmarkItems=s().bookmarks.filter(b=>
-  (virtual==='bookmarks'||virtual==='favourites'&&b.favourite||virtual===null&&(b.folderId??null)===at)&&
+  (virtual==='bookmarks'||virtual==='unfiled-bookmarks'&&(b.folderId??null)===null||virtual==='favourites'&&b.favourite||virtual===null&&at!==null&&(b.folderId??null)===at)&&
   (virtual==='bookmarks'||virtual==='favourites'||typeFilter!=='lists')&&searchFilter(b)&&(!duplicatesOnly||!!duplicateIndex?.info(b))).sort((a,b)=>(a.title||a.sourceTitle||'').localeCompare(b.title||b.sourceTitle||''));
  if(!virtual&&at!==null)folderItems.length&&folderRows(view,folderItems);
  else if(!virtual&&at===null)folderRows(view,folderItems);
+ let unfiledCount=0;
+ if(virtual===null&&at===null){
+  const looseBookmarks=s().bookmarks.filter(b=>b.folderId==null).length;
+  const looseLists=s().lists.filter(l=>l.folderId==null).length;
+  if(looseBookmarks&&typeFilter!=='lists'){
+   entryRow(view,'folder','Unfiled Bookmarks',nice(looseBookmarks)+' bookmarks',()=>orgVirtual('unfiled-bookmarks'));
+   unfiledCount++;
+  }
+  if(looseLists&&typeFilter!=='bookmarks'){
+   entryRow(view,'folder','Unfiled Lists',nice(looseLists)+' lists',()=>orgVirtual('unfiled-lists'));
+   unfiledCount++;
+  }
+ }
  listRows(view,listItems);
  bookmarksSection(view,bookmarkItems);
- if(!folderItems.length&&!listItems.length&&!bookmarkItems.length)noResults(view);
+ if(!folderItems.length&&!listItems.length&&!bookmarkItems.length&&!unfiledCount)noResults(view);
  selectionBar(view);
  const foot=el('p','oi-org-feedback');foot.setAttribute('role','status');view.append(foot);
  if(keepScroll)requestAnimationFrame(()=>window.scrollTo(0,scroll));
