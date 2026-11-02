@@ -2905,6 +2905,9 @@ function flattenFolder(id){
  }
  for(const item of lists)item.folderId=parent;
  for(const item of bookmarks)item.folderId=parent;
+ // Remember deliberate flattening of AI sections, so later imports do not recreate the wrapper.
+ if(parent!==null&&folder(parent)&&source.aiReviewSection==='Bookmarks')folder(parent).aiReviewFlatBookmarks=true;
+ if(parent!==null&&folder(parent)&&source.aiReviewSection==='Conversation lists')folder(parent).aiReviewFlatLists=true;
  data().folders=data().folders.filter(f=>f.id!==id);
  if(Array.isArray(data().quickAccessFolderIds))data().quickAccessFolderIds=data().quickAccessFolderIds.filter(x=>x!==id);
  // Do not touch source conversations, IDs, excerpts, notes, or nested child contents.
