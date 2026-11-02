@@ -2941,6 +2941,11 @@ function changedSelection(type,id,checked){
 }
 function selectAllHere(){for(const k of selectableKeys)selected.add(k);render(true)}
 function deselectAllHere(){selected.clear();render(true)}
+function refreshSelectionButtons(){
+ const all=view.querySelector('.oi-select-all'),none=view.querySelector('.oi-deselect-all');
+ if(all)all.disabled=selectableKeys.size===0||[...selectableKeys].every(key=>selected.has(key));
+ if(none)none.disabled=selected.size===0;
+}
 function toggleSelectMode(){selecting=!selecting;selected.clear();render(true)}
 const checkbox=(type,id,label)=>{
  const n=el('input');n.type='checkbox';n.checked=isChosen(type,id);n.setAttribute('aria-label','Select '+label);
@@ -2968,6 +2973,7 @@ function organisationGlyph(kind){
 }
 function entryRow(parent,icon,label,secondary,onOpen,{type,id,more,badge}={}){
  const row=el('div','oi-org-entry');
+ if(type&&id)row.dataset.oiRef=type+':'+id;
  if(type==='folder')row.classList.add('oi-org-folder-entry');
  if(selecting&&type&&id)row.append(checkbox(type,id,label));
  const main=button('',()=>{if(selecting&&type&&id)changedSelection(type,id,!isChosen(type,id));else onOpen()},'oi-org-item');
@@ -3077,6 +3083,7 @@ function pathTools(root){
   info.append(el('span','',selected.size+' selected · Tap items to select'));
   const buttons=el('div','oi-org-select-actions');
   const all=button('Select all',selectAllHere),none=button('Deselect all',deselectAllHere);
+  all.className='oi-select-all';none.className='oi-deselect-all';
   all.disabled=selectableKeys.size===0||[...selectableKeys].every(key=>selected.has(key));
   none.disabled=selected.size===0;
   all.setAttribute('aria-label','Select all items in the current folder or filtered view');
@@ -3393,8 +3400,8 @@ function render(keepScroll=false){
  const backButton=button('← Back',back,'oi-org-back');backButton.setAttribute('aria-label','Back to '+previous);
  top.append(backButton);
  top.append(el('h1','',virtual?({bookmarks:'All bookmarks',lists:'All conversation lists',favourites:'Favourites','unfiled-bookmarks':'Unfiled Bookmarks','unfiled-lists':'Unfiled Lists','export-queue':'Export Queue'}[virtual]||'Organisation'):at!==null?(api.folder(at)?.name||'All folders'):'Organisation'));
- const exitButton=button('×',()=>{if(window.oiBack)window.oiBack();else window.oiShowMainView()},'oi-org-exit');
- exitButton.setAttribute('aria-label','Close Organisation and return to previous screen');exitButton.title='Close Organisation';
+ const exitButton=button('×',()=>{if(selecting){selecting=false;selected.clear();render(true);return}if(window.oiBack)window.oiBack();else window.oiShowMainView()},'oi-org-exit');
+ exitButton.setAttribute('aria-label',selecting?'Cancel selection':'Close Organisation and return to previous screen');exitButton.title=selecting?'Cancel selection':'Close Organisation';
  top.append(exitButton);
  header.append(top);view.append(header);
  const tools=el('div','oi-org-toptools');
@@ -3403,7 +3410,7 @@ function render(keepScroll=false){
  tools.append(search);view.append(tools);
  if(virtual===null&&at===null){quickAccess(view);if(window.oiExportQueue?.items().length){const queueRow=entryRow(view,'▣','Export Queue',window.oiExportQueue.items().length+' item(s) ready',()=>orgVirtual('export-queue'));queueRow.classList.add('oi-export-queue-root')}}
  pathTools(view);
- if(virtual==='export-queue'){queuePanel(view);selectionBar(view);const foot=el('p','oi-org-feedback');foot.setAttribute('role','status');view.append(foot);if(keepScroll)requestAnimationFrame(()=>window.scrollTo(0,scroll));return;}
+ if(virtual==='export-queue'){queuePanel(view);selectableKeys=new Set(shown);refreshSelectionButtons();selectionBar(view);const foot=el('p','oi-org-feedback');foot.setAttribute('role','status');view.append(foot);if(keepScroll)requestAnimationFrame(()=>window.scrollTo(0,scroll));return;}
  const duplicateIndex=window.oiBookmarkDuplicateIndex?.();
  const folderItems=virtual===null?s().folders.filter(f=>f.parentId===at&&searchFilter(f)).sort((a,b)=>a.name.localeCompare(b.name)):[];
  const listItems=s().lists.filter(l=>
@@ -3417,6 +3424,7 @@ function render(keepScroll=false){
   ...listItems.map(l=>'list:'+l.id),
   ...bookmarkItems.map(b=>'bookmark:'+b.id)
  ]);
+ refreshSelectionButtons();
  if(!virtual&&at!==null)folderItems.length&&folderRows(view,folderItems);
  else if(!virtual&&at===null)folderRows(view,folderItems);
  let unfiledCount=0;
@@ -3439,6 +3447,64 @@ function render(keepScroll=false){
  const foot=el('p','oi-org-feedback');foot.setAttribute('role','status');view.append(foot);
  if(keepScroll)requestAnimationFrame(()=>window.scrollTo(0,scroll));
 }
+// Hold an item to enter selection mode. Scrolls and normal taps are not treated as holds.
+let holdTimer=null,holdPoint=null,suppressClickUntil=0;
+function cancelHold(){if(holdTimer!==null)clearTimeout(holdTimer);holdTimer=null;holdPoint=null}
+view.addEventListener('pointerdown',event=>{
+ if(selecting||event.button!==0||event.isPrimary===false)return;
+ const node=event.target instanceof Element?event.target:null;if(!node)return;
+ if(node.closest('input,textarea,select,.oi-org-more,.bookmark-card button'))return;
+ const candidate=node.closest('.oi-org-entry[data-oi-ref],.bookmark-card[data-bookmark-id]');
+ if(!candidate||!view.contains(candidate))return;
+ const ref=candidate.dataset.oiRef||('bookmark:'+candidate.dataset.bookmarkId);
+ if(!ref||!api.selectedItems([ref]).length)return;
+ if(event.clientX<52)return; // Leave the left edge free for swipe-back.
+ cancelHold();
+ const point={id:event.pointerId,x:event.clientX,y:event.clientY,ref};
+ holdPoint=point;
+ holdTimer=setTimeout(()=>{
+  if(holdPoint!==point)return;
+  holdTimer=null;holdPoint=null;suppressClickUntil=Date.now()+750;
+  selecting=true;selected.clear();selected.add(ref);
+  if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){}
+  render(true);
+ },525);
+},{passive:true});
+view.addEventListener('pointermove',event=>{
+ if(holdPoint&&event.pointerId===holdPoint.id&&Math.hypot(event.clientX-holdPoint.x,event.clientY-holdPoint.y)>12)cancelHold();
+},{passive:true});
+for(const kind of ['pointerup','pointercancel','pointerleave'])view.addEventListener(kind,cancelHold,{passive:true});
+view.addEventListener('contextmenu',event=>{
+ if(event.target instanceof Element&&event.target.closest('.oi-org-entry,.bookmark-card')&& (holdPoint||Date.now()<suppressClickUntil))event.preventDefault();
+});
+view.addEventListener('click',event=>{
+ if(Date.now()<suppressClickUntil){event.preventDefault();event.stopImmediatePropagation();return}
+ if(!selecting)return;
+ const target=event.target instanceof Element?event.target:null;
+ if(!target||target.closest('input,button,select,textarea'))return;
+ const card=target.closest('.bookmark-card[data-bookmark-id]');
+ if(card&&view.contains(card)){
+  event.preventDefault();event.stopImmediatePropagation();
+  changedSelection('bookmark',card.dataset.bookmarkId,!isChosen('bookmark',card.dataset.bookmarkId));
+ }
+},true);
+// Native-feeling edge swipe to the parent folder, not an arbitrary horizontal drag.
+let backGesture=null;
+view.addEventListener('touchstart',event=>{
+ backGesture=null;
+ if(selecting||(at===null&&virtual===null)||event.touches.length!==1)return;
+ const touch=event.touches[0];
+ if(touch.clientX>62)return;
+ if(event.target instanceof Element&&event.target.closest('input,textarea,select'))return;
+ backGesture={x:touch.clientX,y:touch.clientY};
+},{passive:true});
+view.addEventListener('touchend',event=>{
+ if(!backGesture||event.changedTouches.length!==1)return;
+ const touch=event.changedTouches[0],dx=touch.clientX-backGesture.x,dy=touch.clientY-backGesture.y;
+ backGesture=null;
+ if(dx>82&&Math.abs(dy)<65){event.preventDefault();back()}
+},{passive:false});
+view.addEventListener('touchcancel',()=>{backGesture=null},{passive:true});
 window.oiOpenOrganisation=()=>{
  at=null;virtual=null;query='';typeFilter='all';duplicatesOnly=false;limit=80;selecting=false;quickAccessOpen=false;selected.clear();
  render();window.oiNavigate('organisation');
