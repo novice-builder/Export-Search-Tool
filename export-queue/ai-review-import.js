@@ -317,7 +317,7 @@ async function load(file){
 picker.addEventListener('change',()=>{const file=picker.files?.[0];picker.value='';if(file)void load(file)});
 async function organiseExisting(){
  if(busy)throw Error('Another AI import is in progress');
- const prior=structuredClone(app.research),count={newFolders:0,moved:0,removedEmpty:0};
+ const prior=structuredClone(app.research),count={newFolders:0,moved:0,removedEmpty:0,renamed:0};
  const find=id=>app.research.folders.find(f=>f.id===id);
  try{
   for(const b of app.research.bookmarks){
@@ -327,6 +327,17 @@ async function organiseExisting(){
    if(!generic||b.folderId!==generic.id)continue;
    b.folderId=resolveGroupFolder(generic.id,b.aiReview.suggestedGroup||'',count);count.moved++;
   }
+  // Only opt-in repair of old auto-named review folders. Keep manual names and IDs.
+  const roots=app.research.folders.filter(f=>f.parentId===null&&/^(AI Reviewed|AI Reviews)$/i.test(f.name));
+  for(const root of roots){
+   const reviews=app.research.folders.filter(f=>f.parentId===root.id&&f.aiOrganised&&f.aiReviewSource);
+   for(const review of reviews){
+    if(!same(review.name,review.aiReviewSource)||/^Review(?: \d+)?$/i.test(review.name))continue;
+    let next='Review',n=2;
+    while(app.research.folders.some(f=>f.id!==review.id&&f.parentId===root.id&&same(f.name,next)))next='Review '+n++;
+    review.name=next;count.renamed++;
+   }
+  }
   for(const section of [...app.research.folders]){
    if(section.aiReviewSection!=='Conversation lists'||!section.aiOrganised)continue;
    if(app.research.lists.some(l=>l.folderId===section.id))continue;
@@ -334,7 +345,7 @@ async function organiseExisting(){
    if(app.research.folders.some(f=>f.parentId===section.id))continue;
    app.research.folders=app.research.folders.filter(f=>f.id!==section.id);count.removedEmpty++;
   }
-  if(count.newFolders||count.moved||count.removedEmpty){
+  if(count.newFolders||count.moved||count.removedEmpty||count.renamed){
    await window.oiPwaTest?.persistAIReview?.();app.changed();
   }
   return count;
