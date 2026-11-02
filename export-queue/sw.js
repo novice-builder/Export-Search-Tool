@@ -1,5 +1,5 @@
-const CACHE='chatgpt-search-export-queue-pages-shell-v12';
-const SHELL=['./index.html','./manifest.webmanifest','./ai-review-import.js?v=9','./ai-review-package.js?v=3','./export-queue.js?v=3','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
+const CACHE='chatgpt-search-export-queue-pages-shell-v13';
+const SHELL=['./index.html','./manifest.webmanifest','./ai-review-import.js?v=10','./ai-review-package.js?v=3','./export-queue.js?v=3','./icons/icon-192.png','./icons/icon-512.png','./icons/apple-touch-icon.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('chatgpt-search-export-queue-pages-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
