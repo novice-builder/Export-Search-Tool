@@ -367,9 +367,8 @@ button{font:inherit;cursor:default;border:1px solid var(--line-dark);background:
 #view-organisation .oi-org-select-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #view-organisation .oi-org-select-actions button{border:0;background:transparent;font:inherit;font-size:12px;color:var(--accent);font-weight:600;min-height:36px;padding:4px 5px}
 #view-organisation .oi-org-select-actions button:disabled{opacity:.35}
-#view-organisation .oi-org-select-toggle{border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font-size:12px;font-weight:650;min-height:36px;padding:6px 9px}
-#view-organisation .oi-org-select-toggle[aria-pressed=true]{border-color:var(--accent)}
-#view-organisation .oi-org-select-actions button:focus-visible,#view-organisation .oi-org-select-toggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#view-organisation .oi-org-icon-button[aria-pressed=true]{color:var(--accent);background:var(--card)}
+#view-organisation .oi-org-select-actions button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #view-organisation .oi-org-entry{background:var(--card);min-height:54px;padding:4px 6px;margin:0 0 8px;border:0;border-bottom:1px solid var(--line);border-radius:0}
 #view-organisation .oi-org-item{min-height:48px;padding:7px 5px;gap:12px}
 #view-organisation .oi-org-folder-entry .oi-org-icon{color:var(--ink)}
@@ -3008,7 +3007,7 @@ function compactAction(label,which,action){
  const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');
  svg.setAttribute('viewBox','0 0 24 24');svg.setAttribute('aria-hidden','true');svg.classList.add('ui-glyph');
  const p=document.createElementNS(svg.namespaceURI,'path');
- p.setAttribute('d',which==='plus'?'M12 5v14 M5 12h14':'M5 12h.01 M12 12h.01 M19 12h.01');
+ p.setAttribute('d',which==='plus'?'M12 5v14 M5 12h14':which==='select'?'M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2H6a2 2 0 0 1 -2 -2V6a2 2 0 0 1 2 -2Z M8 12l3 3 5-6':'M5 12h.01 M12 12h.01 M19 12h.01');
  if(which==='more')p.setAttribute('stroke-width','3.4');
  svg.append(p);b.append(svg);return b;
 }
@@ -3073,9 +3072,8 @@ function pathTools(root){
   }
  }
  const actions=el('div','oi-org-pathactions');
- const selectToggle=button(selecting?'Done':'Select',toggleSelectMode,'oi-org-select-toggle');
+ const selectToggle=compactAction(selecting?'Finish selection':'Select items','select',toggleSelectMode);
  selectToggle.setAttribute('aria-pressed',String(selecting));
- selectToggle.setAttribute('aria-label',selecting?'Finish selecting items':'Select folders, lists or bookmarks');
  actions.append(selectToggle);
  actions.append(compactAction('New folder, list or saved search','plus',()=>newMenu()));
  actions.append(compactAction('More options, including Select','more',()=>optionsMenu()));
